@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>签训通</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+
+        .header {
+            background-color: #2e8bff;
+            color: white;
+            padding: 20px 30px;
+            font-size: 24px;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .container {
+            display: flex;
+            height: calc(100vh - 72px);
+        }
+
+        .sidebar {
+            width: 220px;
+            background-color: #fff;
+            border-right: 1px solid #e0e0e0;
+            padding-top: 30px;
+        }
+
+        .sidebar a {
+            display: block;
+            padding: 14px 24px;
+            color: #2e2e2e;
+            text-decoration: none;
+            font-size: 16px;
+            border-left: 4px solid transparent;
+            transition: 0.2s;
+        }
+
+        .sidebar a:hover {
+            background-color: #f5f7fa;
+            border-left: 4px solid #2e8bff;
+            color: #2e8bff;
+        }
+
+        .content {
+            flex-grow: 1;
+            padding: 40px;
+            overflow-y: auto;
+        }
+
+        .upload-box {
+            background-color: #fff;
+            padding: 30px;
+            max-width: 600px;
+            margin: auto;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+            border-radius: 12px;
+        }
+
+        .upload-box h2 {
+            margin-bottom: 30px;
+        }
+
+        .upload-box label {
+            display: block;
+            text-align: left;
+            font-weight: 500;
+            margin-bottom: 6px;
+            margin-top: 14px;
+        }
+
+        .upload-box input[type="file"],
+        .upload-box input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            margin-bottom: 14px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+
+        .upload-box button {
+            background-color: #2e8bff;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .upload-box button:hover {
+            background-color: #1a6fe2;
+        }
+
+        .record-table {
+            width: 100%;
+            background-color: #fff;
+            border-collapse: collapse;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 30px;
+        }
+
+        .record-table th,
+        .record-table td {
+            padding: 14px 18px;
+            border-bottom: 1px solid #f0f0f0;
+            text-align: center;
+            font-size: 15px;
+        }
+
+        .record-table th {
+            background-color: #f9fafb;
+            font-weight: bold;
+        }
+
+        .record-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        .record-table a {
+            color: #2e8bff;
+            text-decoration: none;
+        }
+
+        .record-table button {
+            padding: 6px 12px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .record-table button:hover {
+            background-color: #c0392b;
+        }
+
+        input[type="text"] {
+            padding: 8px 12px;
+            width: 220px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .btn-delete {
+            background-color: #e74c3c;
+        }
+
+        .btn-add {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+
+        .btn-add:hover {
+            background-color: #219150;
+        }
+
+        .btn-view,
+        .btn-download {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 6px;
+            text-decoration: none !important;
+            font-size: 14px;
+            font-weight: 500;
+            color: white !important;
+            /* ✅ 强制字体颜色为白色 */
+            transition: background-color 0.2s ease;
+        }
+
+        .btn-view {
+            background-color: #3498db;
+        }
+
+        .btn-view:hover {
+            background-color: #2980b9;
+        }
+
+        .btn-download {
+            background-color: #2ecc71;
+        }
+
+        .btn-download:hover {
+            background-color: #27ae60;
+        }
+
+        .employee-select-container {
+            margin-top: 10px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px 16px;
+        }
+
+        .employee-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .employee-item {
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s ease;
+        }
+
+        .employee-item:hover {
+            background-color: #f0f8ff;
+        }
+
+        .employee-actions {
+            text-align: right;
+        }
+
+        .employee-actions button {
+            background-color: #eee;
+            color: #333;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            margin-left: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .employee-actions button:hover {
+            background-color: #ddd;
+        }
+
+        h2,
+        h3 {
+            color: #222;
+        }
+
+        .option-item {
+            display: flex;
+            align-items: flex-end;
+            /* 关键：底部对齐 */
+            gap: 8px;
+            margin-bottom: 8px;
+            background: #fff;
+            border-radius: 6px;
+            border: 1px solid #eee;
+            padding: 4px 8px;
+            min-height: 40px;
+            height: 48px;
+            box-sizing: border-box;
+        }
+
+        .option-item input[type="text"] {
+            flex: 1 1 0;
+            min-width: 0;
+            width: auto !important;
+            font-size: 15px;
+            height: 40px;
+            /* 统一为40px */
+            line-height: 40px;
+            /* 内容居中且和其它元素底部对齐 */
+            padding: 0 12px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            margin: 0;
+            /* 关键：防止margin影响溢出 */
+        }
+
+        .correct-label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 15px;
+            padding: 0 14px;
+            background: #f4f8fd;
+            border-radius: 6px;
+            border: 1.5px solid #c5e0fa;
+            color: #2573d6;
+            white-space: nowrap;
+            height: 40px;
+            /* 统一高度 */
+            line-height: 40px;
+            box-sizing: border-box;
+        }
+
+        .correct-label input[type="checkbox"] {
+            accent-color: #2e8bff;
+            width: 20px;
+            height: 20px;
+            margin: 0 4px 0 0;
+            vertical-align: middle;
+        }
+
+        .option-item button {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            max-width: 40px;
+            background: #faeaea;
+            border: 1.5px solid #e74c3c;
+            color: #e74c3c;
+            font-size: 22px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 2px;
+            box-sizing: border-box;
+            padding: 0;
+        }
+
+        .option-item button:hover {
+            background: #ffecec;
+            border-color: #c0392b;
+        }
+
+
+        .btn-add,
+        .btn-delete {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 88px;
+            /* 最小宽度，适配较长内容 */
+            height: 32px;
+            font-size: 13px;
+            border: none;
+            outline: none;
+            padding: 0 10px;
+            border-radius: 6px;
+            margin-left: 0;
+            margin-right: 8px;
+            box-sizing: border-box;
+            white-space: nowrap;
+            vertical-align: middle;
+            /* 保持背景和颜色一致 */
+        }
+
+        .btn-add {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .btn-add:hover {
+            background-color: #219150;
+        }
+
+        .btn-delete {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .btn-delete:hover:enabled {
+            background-color: #c0392b;
+        }
+
+        /* 禁用时的样式 */
+        .btn-delete:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">📝 签训通 - 智能签名培训答题系统</div>
+
+    <div class="container">
+        <div class="sidebar">
+            <a href="#upload" onclick="navigateAndRemember('upload')">📥 上传文件</a>
+            <a href="#records" onclick="navigateAndRemember('records')">📄 签名记录</a>
+            <a href="#employees" onclick="navigateAndRemember('employees')">👥 员工管理</a>
+        </div>
+
+        <div class="content">
+            <div id="upload-section">
+                <div class="upload-box">
+                    <h2>📩 上传新的待签名文件</h2>
+                    <form action="/" method="post" enctype="multipart/form-data" id="uploadForm" target="_blank">
+                        <label for="pdfInput">选择 PDF 文件</label>
+                        <input type="file" name="pdf" id="pdfInput" accept=".pdf" required>
+
+                        <label for="titleInput">文件标题</label>
+                        <input type="text" name="title" id="titleInput" required>
+
+                        <label>选择签名员工</label>
+                        <div class="employee-select-container">
+                            <div class="employee-list">
+                                {% for emp in employees %}
+                                <label class="employee-item">
+                                    <input type="checkbox" name="employee_ids" value="{{ emp.id }}">
+                                    <span>{{ emp.name }} <small>(#{{ emp.id }})</small></span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <div class="employee-actions">
+                                <button type="button" onclick="selectAllEmployees()">全选</button>
+                                <button type="button" onclick="clearAllEmployees()">清空</button>
+                            </div>
+                        </div>
+
+                        <label>
+                            <input type="checkbox" name="quiz_required" id="quizToggle" onchange="toggleQuizConfig()">
+                            🧠 是否启用答题功能（员工需先答题才能签名）
+                        </label>
+
+                        <div id="quizConfigArea" style="display: none; margin-top: 20px;">
+                            <label>🧠 题库配置（选择题，仅支持单选）</label>
+                            <div id="question-container"></div>
+                        </div>
+
+                        <button type="submit">📩 上传并配置签名区域</button>
+                    </form>
+                </div>
+            </div>
+
+            <div id="records-section" style="display:none;">
+                <h3>📜 签名任务列表</h3>
+                <table class="record-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>标题</th>
+                            <th>创建时间</th>
+                            <th>签名进度</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for task in tasks %}
+                        <tr>
+                            <td>{{ task.id }}</td>
+                            <td>{{ task.title }}</td>
+                            <td>{{ task.created_at }}</td>
+                            <td>
+                                {% if task.is_completed %}
+                                ✅ 已完成（{{ task.progress }}）
+                                {% else %}
+                                ❌ 未完成（{{ task.progress }}）
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a class="btn-view" href="/invite/{{ task.task_id }}" target="_blank">🔍 查看</a>
+                                {% if task.is_completed %}
+                                <a class="btn-download" href="/static/final/{{ task.task_id }}_signed.pdf" download>📄
+                                    下载</a>
+                                {% endif %}
+                                <button class="btn-delete" onclick="deleteTask('{{ task.task_id }}', this, event)">🗑
+                                    删除</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="employees-section" style="display:none;">
+                <h3>👥 员工列表</h3>
+                <form method="post" action="/employee/new" style="margin-bottom: 20px;">
+                    <input type="text" name="name" placeholder="输入员工姓名" required>
+                    <button type="submit" class="btn-add">➕ 添加</button>
+                </form>
+
+                <table class="record-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>姓名</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for emp in employees %}
+                        <tr>
+                            <td>{{ emp.id }}</td>
+                            <td>{{ emp.name }}</td>
+                            <td>
+                                <button class="btn-delete" onclick="deleteEmployee({{ emp.id }}, this, event)">🗑
+                                    删除</button>
+
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showSection(section) {
+            document.getElementById('upload-section').style.display = 'none';
+            document.getElementById('records-section').style.display = 'none';
+            document.getElementById('employees-section').style.display = 'none';
+            document.getElementById(section + '-section').style.display = 'block';
+        }
+
+        function navigateAndRemember(section) {
+            // 设置 localStorage 保留用户点击状态
+            localStorage.setItem("activeSection", section);
+            location.reload(); // 刷新页面以从后端加载最新数据
+        }
+
+        // 自动将文件名填入标题框
+        document.addEventListener('DOMContentLoaded', function () {
+            const active = localStorage.getItem("activeSection") || "upload";
+            showSection(active);
+
+            // 如果已经勾选“启用答题”，初始化显示默认题目
+            const quizToggle = document.getElementById("quizToggle");
+            if (quizToggle.checked) {
+                toggleQuizConfig(); // 自动触发显示 + 默认添加题目
+            }
+
+            const fileInput = document.getElementById('pdfInput');
+            const titleInput = document.getElementById('titleInput');
+
+            fileInput.addEventListener('change', function () {
+                const file = this.files[0];
+                if (file && titleInput) {
+                    const baseName = file.name.replace(/\.pdf$/i, '');
+                    titleInput.value = baseName;
+                    titleInput.focus();
+                }
+            });
+        });
+
+        // 添加员工逻辑
+        document.querySelector('#employees-section form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const nameInput = this.querySelector('input[name="name"]');
+            const name = nameInput.value.trim();
+            if (!name) return;
+
+            fetch("/employee/new", {
+                method: "POST",
+                body: new URLSearchParams({ name })
+            }).then(res => res.json()).then(data => {
+                if (data.status === "success") {
+                    const tbody = document.querySelector('#employees-section tbody');
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+        <td>${data.id}</td>
+        <td>${data.name}</td>
+        <td>
+            <button class="btn-delete" onclick="deleteEmployee(${data.id}, event, this)">🗑 删除</button>
+        </td>`;
+                    tbody.prepend(tr);
+                    nameInput.value = '';
+                }
+            });
+        });
+
+        function deleteTask(taskId, button, event) {
+            event.preventDefault();
+
+            if (!confirm("确定删除该签名任务？")) return;
+
+            fetch(`/delete_record/${taskId}`, {
+                method: "POST"
+            }).then(res => res.json()).then(data => {
+                if (data.status === "success") {
+                    button.closest("tr").remove();
+                } else {
+                    alert("删除失败");
+                }
+            });
+        }
+
+        function deleteEmployee(id, button, event) {
+            event.preventDefault();
+
+            if (!confirm("确认删除该员工？")) return;
+
+            fetch(`/employee/delete/${id}`, {
+                method: "POST"
+            }).then(res => res.json()).then(data => {
+                if (data.status === "success") {
+                    button.closest("tr").remove();
+                } else {
+                    alert("删除失败");
+                }
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const select = document.getElementById("employees");
+            if (select) {
+                select.title = "按住 Ctrl 或 ⌘ 键可多选员工";
+            }
+        });
+
+        function selectAllEmployees() {
+            document.querySelectorAll('.employee-item input[type="checkbox"]').forEach(cb => cb.checked = true);
+        }
+
+        function clearAllEmployees() {
+            document.querySelectorAll('.employee-item input[type="checkbox"]').forEach(cb => cb.checked = false);
+        }
+
+        let questionIndex = 0;
+
+        window.addQuestion = function () {
+            const container = document.getElementById("question-container");
+            const index = questionIndex++;
+
+            const div = document.createElement("div");
+            div.className = "quiz-question-block";
+            div.style = "margin-bottom:20px;padding:16px;border:1px solid #ddd;border-radius:8px;background:#f9f9f9;position:relative;";
+
+            div.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <label class="question-title"><b>题目 X</b></label>
+                    <span>
+                        <button type="button" class="btn-add" onclick="addQuestion()">➕ 添加题目</button>
+                        <button type="button" class="btn-delete" onclick="removeQuestion(this)">🗑 删除题目</button>
+                    </span>
+                </div>
+                <input type="text" name="questions[${index}][content]" placeholder="请输入题干内容" required style="margin-bottom:10px;">
+                <label>选项</label>
+                <div class="options-container"></div>
+                <button type="button" onclick="addOption(this, ${index})">➕ 添加选项</button>
+            `;
+
+            container.appendChild(div);
+
+            // 自动添加两个初始选项
+            const btn = div.querySelector("button[onclick^='addOption']");
+            addOption(btn, index);
+            addOption(btn, index);
+
+            updateDeleteButtons();
+            refreshQuestionLabels();
+        };
+
+        window.removeQuestion = function (btn) {
+            btn.closest(".quiz-question-block").remove();
+            updateDeleteButtons();
+            refreshQuestionLabels();
+        };
+
+        window.addOption = function (btn, qIndex) {
+            const container = btn.previousElementSibling;
+            const optionCount = container.children.length;
+
+            const div = document.createElement("div");
+            div.className = "option-item";
+            div.innerHTML = `
+                <input type="text" name="questions[${qIndex}][options][]" placeholder="选项内容" required>
+                <span class="correct-label">
+                    <input type="radio" name="questions[${qIndex}][answers]" value="${optionCount}">
+                    正确
+                </span>
+                <button type="button" onclick="removeOption(this)">❌</button>
+            `;
+
+            container.appendChild(div);
+        };
+
+        window.removeOption = function (btn) {
+            btn.parentElement.remove();
+        };
+
+        // 禁用/启用删除题目按钮
+        function updateDeleteButtons() {
+            const questions = document.querySelectorAll(".quiz-question-block");
+            const delBtns = document.querySelectorAll(".quiz-question-block .btn-delete");
+            if (questions.length <= 1) {
+                delBtns.forEach(btn => {
+                    btn.disabled = true;
+                    btn.style.opacity = 0.5;
+                    btn.style.cursor = "not-allowed";
+                });
+            } else {
+                delBtns.forEach(btn => {
+                    btn.disabled = false;
+                    btn.style.opacity = "";
+                    btn.style.cursor = "";
+                });
+            }
+        }
+
+        function toggleQuizConfig() {
+            const checkbox = document.getElementById("quizToggle");
+            const configArea = document.getElementById("quizConfigArea");
+            configArea.style.display = checkbox.checked ? "block" : "none";
+
+            if (checkbox.checked) {
+                // 如果还没有题目，则默认添加一个
+                const container = document.getElementById("question-container");
+                if (container.children.length === 0) {
+                    addQuestion();
+                }
+                updateDeleteButtons();
+            }
+        }
+
+        function refreshQuestionLabels() {
+            document.querySelectorAll('.quiz-question-block').forEach((div, i) => {
+                const label = div.querySelector('.question-title');
+                if (label) {
+                    label.textContent = `题目 ${i + 1}`;
+                }
+            });
+        }
+
+
+    </script>
+
+</body>
+
+</html>

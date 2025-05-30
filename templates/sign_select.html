@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>签训通 - 签名人选择</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f9f9f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .form-box {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        select,
+        button {
+            font-size: 16px;
+            padding: 8px 12px;
+            margin-top: 10px;
+        }
+
+        h2 {
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="form-box">
+        <h2>请选择您的身份进行签名</h2>
+        <form method="POST" action="/sign_select/{{ task_id }}">
+            <select name="employee_id" required>
+                {% for emp in employees %}
+                <option value="{{ emp.id }}">{{ emp.name }}</option>
+                {% endfor %}
+            </select>
+            <br>
+            <button type="submit">✅ 进入签名</button>
+        </form>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>签训通 - 手写签名</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            padding: 40px 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background-color: #f4f4f4;
+            text-align: center;
+        }
+
+        h2 {
+            margin-bottom: 10px;
+        }
+
+        p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        canvas {
+            border: 2px solid #2e8bff;
+            background: #fff;
+            border-radius: 6px;
+            margin-top: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 360px;
+            height: auto;
+            aspect-ratio: 2 / 1;
+        }
+
+        .btn-group {
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 10px 16px;
+            font-size: 15px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .btn-clear {
+            background-color: #ccc;
+            color: #333;
+        }
+
+        .btn-save {
+            background-color: #2e8bff;
+            color: #fff;
+        }
+
+        .btn-clear:hover {
+            background-color: #bbb;
+        }
+
+        .btn-save:hover {
+            background-color: #1a6fe2;
+        }
+
+        body,
+        html {
+            touch-action: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>✍️ 手写签名</h2>
+    <p>请在下方签名板内签名，点击“确认签名”后会回到原文件页面</p>
+
+    <canvas id="signatureCanvas"></canvas>
+
+    <div class="btn-group">
+        <button class="btn-clear" onclick="clearCanvas()">🧹 清空</button>
+        <button class="btn-save" onclick="saveSignature()">✅ 确认签名</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("signatureCanvas");
+        const ctx = canvas.getContext("2d");
+        const taskId = "{{ task_id }}";
+        const employeeId = "{{ employee_id }}";
+
+        let isDrawing = false;
+        let hasSigned = false;
+
+        function resizeCanvas() {
+            const width = Math.min(window.innerWidth - 40, 360);
+            const height = width / 2;
+            canvas.width = width;
+            canvas.height = height;
+            clearCanvas();
+        }
+
+        window.addEventListener("resize", resizeCanvas);
+        window.onload = resizeCanvas;
+
+        canvas.addEventListener("mousedown", e => {
+            isDrawing = true;
+            hasSigned = true;
+            ctx.beginPath();
+            ctx.moveTo(e.offsetX, e.offsetY);
+        });
+
+        canvas.addEventListener("mousemove", e => {
+            if (!isDrawing) return;
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.stroke();
+        });
+
+        canvas.addEventListener("mouseup", () => isDrawing = false);
+        canvas.addEventListener("mouseleave", () => isDrawing = false);
+
+        canvas.addEventListener("touchstart", e => {
+            e.preventDefault();
+            isDrawing = true;
+            hasSigned = true;
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        });
+
+        canvas.addEventListener("touchmove", e => {
+            if (!isDrawing) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        });
+
+        canvas.addEventListener("touchend", () => isDrawing = false);
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            hasSigned = false;
+        }
+
+        function saveSignature() {
+            if (!hasSigned) {
+                alert("⚠️ 请先签名再确认");
+                return;
+            }
+
+            const dataURL = canvas.toDataURL("image/png");
+            localStorage.setItem(`signature_image_${taskId}_${employeeId}`, dataURL);
+            alert("✅ 签名已保存");
+            window.location.href = `/sign/${taskId}/${employeeId}`;
+        }
+    </script>
+</body>
+
+</html>

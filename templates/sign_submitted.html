@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <title>签训通 - 签名成功</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background-color: #f6f6f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .success-card {
+            background-color: #fff;
+            padding: 40px 50px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            animation: fadeInUp 0.6s ease-out;
+            max-width: 90%;
+        }
+
+        .success-card h2 {
+            color: #2ecc71;
+            margin-bottom: 20px;
+            font-size: 22px;
+        }
+
+        .success-card p {
+            font-size: 16px;
+            color: #333;
+            margin: 10px 0;
+        }
+
+        .close-btn {
+            margin-top: 30px;
+            padding: 10px 24px;
+            font-size: 16px;
+            background-color: #2e8bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background-color: #1a6fe2;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="success-card">
+        <h2>✅ 签名已成功提交！</h2>
+        <p>任务 ID：{{ task_id }}</p>
+        <p>感谢您的签名，您可以关闭此页面。</p>
+        <button class="close-btn" onclick="window.close()">关闭页面</button>
+    </div>
+</body>
+
+</html>

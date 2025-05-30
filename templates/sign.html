@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <title>签训通 - 签名填写</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background-color: #f6f6f6;
+        }
+
+        .top-bar {
+            background-color: #fff;
+            padding: 10px 20px;
+            border-bottom: 1px solid #ddd;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .pdf-container {
+            width: fit-content;
+            margin: 30px auto;
+            background: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            width: auto;
+        }
+
+        .btn-bar {
+            text-align: center;
+            margin: 40px 0;
+        }
+
+        .btn-bar button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 0 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+        }
+
+        .btn-sign {
+            background-color: #2ecc71;
+            color: white;
+        }
+
+        .btn-submit {
+            background-color: #2e8bff;
+            color: white;
+        }
+
+        .btn-sign:hover {
+            background-color: #27ae60;
+        }
+
+        .btn-submit:hover {
+            background-color: #1a6fe2;
+        }
+
+        .signature-placeholder {
+            position: absolute;
+            border: 2px dashed red;
+            background-color: rgba(255, 0, 0, 0.1);
+            animation: pulse 1s infinite alternate;
+            z-index: 10;
+        }
+
+        @keyframes pulse {
+            from {
+                box-shadow: 0 0 0px red;
+            }
+
+            to {
+                box-shadow: 0 0 10px red;
+            }
+        }
+
+        .sig-name {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: gray;
+            font-size: 14px;
+            font-style: italic;
+            pointer-events: none;
+            text-align: center;
+            padding: 2px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="top-bar">
+        <h2>签名任务 ID：{{ task_id }}</h2>
+    </div>
+
+    <div id="pdf-wrapper"></div>
+
+    <div class="btn-bar" id="sign-bar">
+        {% if quiz_required and not quiz_passed %}
+        <button type="button" class="btn-sign" style="background:#e67e22;"
+            onclick="location.href='/sign_quiz/{{ task_id }}/{{ employee_id }}'">
+            📝 去答题
+        </button>
+        <span style="color:#aaa;font-size:16px; margin-left:20px;">答题通过后才能签名</span>
+        {% else %}
+        <button type="button" class="btn-sign" onclick="goToSignCanvas()">✍️ 开始签名</button>
+        <button type="button" class="btn-submit" onclick="submitSignature()">✅ 提交签名</button>
+        {% endif %}
+    </div>
+
+    <script>
+        function gotoQuiz() {
+            window.location.href = '/sign_quiz/{{ task_id }}/{{ employee_id }}';
+        }
+    </script>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script>
+        const taskId = "{{ task_id }}";
+        const employeeId = "{{ employee_id }}";
+        const employeeName = "{{ employee_name }}";
+        const boxes = {{ boxes | tojson }};
+        const pdfUrl = "/static/uploads/{{ encoded_title }}";
+        const signatureKey = `signature_image_${taskId}_${employeeId}`;
+        const signatureImg = localStorage.getItem(signatureKey);
+
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+
+        const wrapper = document.getElementById("pdf-wrapper");
+
+        let previewWidth = 1240;
+        let previewHeight = 1754;
+
+        function renderPDF(url) {
+            pdfjsLib.getDocument(url).promise.then(pdfDoc => {
+                for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+                    pdfDoc.getPage(pageNum).then(page => {
+                        const scale = 1.5;
+                        const viewport = page.getViewport({ scale });
+
+                        const container = document.createElement("div");
+                        container.className = "pdf-container";
+
+                        const canvas = document.createElement("canvas");
+                        const context = canvas.getContext("2d");
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        container.appendChild(canvas);
+
+                        if (pageNum === 1) {
+                            previewWidth = canvas.width;
+                            previewHeight = canvas.height;
+                        }
+
+                        page.render({ canvasContext: context, viewport });
+
+                        // 当前页中该员工的签名框
+                        boxes.filter(b => b.page === pageNum && b.employee_id == employeeId).forEach(b => {
+                            const boxLeft = b.left + "px";
+                            const boxTop = b.top + "px";
+                            const boxWidth = b.width + "px";
+                            const boxHeight = b.height + "px";
+
+                            if (b.signed && b.image) {
+                                const img = document.createElement("img");
+                                img.src = b.image;
+                                img.style.width = boxWidth;
+                                img.style.height = boxHeight;
+                                img.style.position = "absolute";
+                                img.style.left = boxLeft;
+                                img.style.top = boxTop;
+                                img.style.zIndex = 20;
+                                img.style.pointerEvents = "none";
+                                container.appendChild(img);
+                            } else if (signatureImg) {
+                                const img = document.createElement("img");
+                                img.src = signatureImg;
+                                img.style.width = boxWidth;
+                                img.style.height = boxHeight;
+                                img.style.position = "absolute";
+                                img.style.left = boxLeft;
+                                img.style.top = boxTop;
+                                img.style.zIndex = 20;
+                                img.style.pointerEvents = "none";
+                                container.appendChild(img);
+                            } else {
+                                const nameDiv = document.createElement("div");
+                                nameDiv.className = "signature-placeholder";
+                                nameDiv.style.left = boxLeft;
+                                nameDiv.style.top = boxTop;
+                                nameDiv.style.width = boxWidth;
+                                nameDiv.style.height = boxHeight;
+                                nameDiv.style.border = "2px dashed gray";
+                                nameDiv.style.backgroundColor = "transparent";
+                                nameDiv.style.animation = "none";
+
+                                const label = document.createElement("div");
+                                label.className = "sig-name";
+                                label.textContent = employeeName;
+                                nameDiv.appendChild(label);
+                                container.appendChild(nameDiv);
+                            }
+                        });
+
+                        wrapper.appendChild(container);
+                    });
+                }
+            });
+        }
+
+        function submitSignature() {
+            if (!signatureImg) {
+                alert("请先完成签名");
+                return;
+            }
+
+            const payload = boxes
+                .filter(b => b.employee_id == employeeId)
+                .map(b => ({
+                    page: b.page,
+                    left: b.left,
+                    top: b.top,
+                    width: b.width,
+                    height: b.height,
+                    employee_id: employeeId,
+                    image: signatureImg,
+                    preview_width: previewWidth,
+                    preview_height: previewHeight
+                }));
+
+            fetch(`/submit_sign/${taskId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            }).then(res => res.json()).then(data => {
+                if (data.status === "success") {
+                    window.location.href = data.redirect;
+                } else {
+                    alert("提交失败：" + data.msg);
+                }
+            });
+        }
+
+        window.onload = () => {
+            renderPDF(pdfUrl);
+        };
+
+        function goToSignCanvas() {
+            // employeeId 是模板变量，要在渲染时插入
+            window.location.href = `/sign_canvas/{{ task_id }}/{{ employee_id }}`;
+        }
+
+    </script>
+</body>
+
+</html>

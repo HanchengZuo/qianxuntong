@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>签训通 - 签名区域选择</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background-color: #f6f6f6;
+        }
+
+        .top-bar {
+            background-color: #fff;
+            border-bottom: 1px solid #ddd;
+            padding: 10px 20px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .pdf-container {
+            width: fit-content;
+            margin: 30px auto;
+            background: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            width: auto;
+            margin: 0 auto;
+            /* ✅ 水平居中 */
+        }
+
+        .sig-box {
+            position: absolute;
+            border: 2px dashed red;
+            background-color: rgba(255, 0, 0, 0.1);
+            animation: pulse 1s infinite alternate;
+            z-index: 100;
+        }
+
+        @keyframes pulse {
+            from {
+                box-shadow: 0 0 0px red;
+            }
+
+            to {
+                box-shadow: 0 0 10px red;
+            }
+        }
+
+        .employee-select {
+            position: absolute;
+            top: -24px;
+            left: 0;
+            z-index: 20;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            font-size: 18px;
+            cursor: pointer;
+            z-index: 200;
+            /* ✅ 高于 sig-box 其他内容 */
+        }
+
+        .submit-btn {
+            display: block;
+            margin: 40px auto;
+            padding: 12px 24px;
+            font-size: 16px;
+            background-color: #2e8bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .submit-btn:hover {
+            background-color: #1a6fe2;
+        }
+
+        .sig-name {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: gray;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 110;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="top-bar">
+        <h2>选择签名区域（任务ID：{{ record.title }}）</h2>
+        <p style="color: gray;">🖱 请在 PDF 页面上框选一大片签名区域，系统将自动为员工们均匀分配签名区域</p>
+    </div>
+
+    <div id="pdf-wrapper"></div>
+
+    <button class="submit-btn" onclick="submitBoxes()">✅ 提交签名区域</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script>
+        const taskId = "{{ task_id }}";
+        // 所有员工列表
+        const employees = {{ employees | tojson }};
+        // ✅ 仅当前任务中勾选的员工 ID（整数数组）
+        const selectedEmployeeIds = {{ record.get_employee_ids() | tojson }};
+
+        // ✅ 当前任务中被选中的员工对象列表
+        const selectedEmployees = employees.filter(e => selectedEmployeeIds.includes(e.id.toString()));
+
+        const pdfUrl = "/static/uploads/{{ encoded_title }}";
+
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+
+        const wrapper = document.getElementById('pdf-wrapper');
+        const boxes = [];
+        const usedEmployeeIds = new Set();
+        let isDrawing = false, startX, startY, currentBox;
+
+        function renderPDF(url) {
+            pdfjsLib.getDocument(url).promise.then(pdfDoc => {
+                for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+                    pdfDoc.getPage(pageNum).then(page => {
+                        const scale = 1.5;
+                        const viewport = page.getViewport({ scale });
+
+                        const container = document.createElement('div');
+                        container.className = 'pdf-container';
+                        container.dataset.page = pageNum;
+
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        container.appendChild(canvas);
+                        wrapper.appendChild(container);
+
+                        // ✅ 保存每页的大小为参考值
+                        if (pageNum === 1) {
+                            previewWidth = canvas.width;
+                            previewHeight = canvas.height;
+                        }
+
+                        page.render({ canvasContext: context, viewport });
+
+                        container.addEventListener('mousedown', e => {
+                            if (e.target.closest('.sig-box')) return;
+
+                            isDrawing = true;
+                            const rect = canvas.getBoundingClientRect();
+                            startX = e.clientX - rect.left;
+                            startY = e.clientY - rect.top;
+
+                            currentBox = document.createElement('div');
+                            currentBox.className = 'sig-box';
+                            currentBox.style.left = `${startX}px`;
+                            currentBox.style.top = `${startY}px`;
+                            currentBox.style.width = '0px';
+                            currentBox.style.height = '0px';
+                            container.appendChild(currentBox);
+                        });
+
+                        container.addEventListener('mousemove', e => {
+                            if (!isDrawing || !currentBox) return;
+                            const rect = canvas.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            const y = e.clientY - rect.top;
+
+                            currentBox.style.left = `${Math.min(x, startX)}px`;
+                            currentBox.style.top = `${Math.min(y, startY)}px`;
+                            currentBox.style.width = `${Math.abs(x - startX)}px`;
+                            currentBox.style.height = `${Math.abs(y - startY)}px`;
+                        });
+
+                        container.addEventListener('mouseup', () => {
+                            if (!isDrawing || !currentBox) return;
+                            isDrawing = false;
+
+                            const boxRect = currentBox.getBoundingClientRect();
+                            const canvasRect = canvas.getBoundingClientRect();
+
+                            const left = boxRect.left - canvasRect.left;
+                            const top = boxRect.top - canvasRect.top;
+                            const width = boxRect.width;
+                            const height = boxRect.height;
+
+                            currentBox.remove(); // 删除原始大框
+                            currentBox = null;
+
+                            // 获取尚未分配的员工
+                            const remainingEmployees = selectedEmployees.filter(emp => !usedEmployeeIds.has(emp.id));
+                            const count = remainingEmployees.length;
+                            if (count === 0) {
+                                alert("⚠️ 所有员工已分配！");
+                                return;
+                            }
+
+                            const rows = Math.ceil(Math.sqrt(count));
+                            const cols = Math.ceil(count / rows);
+                            const boxWidth = width / cols;
+                            const boxHeight = height / rows;
+
+                            let index = 0;
+                            for (let r = 0; r < rows && index < count; r++) {
+                                for (let c = 0; c < cols && index < count; c++) {
+                                    const emp = remainingEmployees[index++];
+                                    const subLeft = left + c * boxWidth;
+                                    const subTop = top + r * boxHeight;
+
+                                    const box = document.createElement('div');
+                                    box.className = 'sig-box';
+                                    box.style.left = `${subLeft}px`;
+                                    box.style.top = `${subTop}px`;
+                                    box.style.width = `${boxWidth}px`;
+                                    box.style.height = `${boxHeight}px`;
+
+                                    const nameLabel = document.createElement('div');
+                                    nameLabel.className = 'sig-name';
+                                    nameLabel.textContent = emp.name;
+
+                                    const closeBtn = document.createElement('span');
+                                    closeBtn.textContent = '❌';
+                                    closeBtn.className = 'close-btn';
+
+                                    closeBtn.addEventListener('click', e => {
+                                        e.stopPropagation();
+                                        const thisBox = closeBtn.parentElement;
+                                        thisBox.remove();
+                                        const idx = boxes.findIndex(b => b.element === thisBox);
+                                        if (idx !== -1) {
+                                            usedEmployeeIds.delete(boxes[idx].employee_id);
+                                            boxes.splice(idx, 1);
+                                        }
+                                    });
+
+                                    box.appendChild(nameLabel);
+                                    box.appendChild(closeBtn);
+                                    container.appendChild(box);
+
+                                    usedEmployeeIds.add(emp.id);
+
+                                    boxes.push({
+                                        page: pageNum,
+                                        left: subLeft,
+                                        top: subTop,
+                                        width: boxWidth,
+                                        height: boxHeight,
+                                        employee_id: emp.id,
+                                        element: box
+                                    });
+                                }
+                            }
+                        });
+                    });
+                }
+            });
+        }
+
+        function isOverlapping(newBox, page) {
+            return boxes.some(b =>
+                b.page === page &&
+                !(newBox.left + newBox.width <= b.left ||
+                    newBox.left >= b.left + b.width ||
+                    newBox.top + newBox.height <= b.top ||
+                    newBox.top >= b.top + b.height)
+            );
+        }
+
+
+        function submitBoxes() {
+            if (boxes.length === 0) {
+                alert("⚠️ 请先添加签名区域");
+                return;
+            }
+
+            const payload = boxes.map(b => ({
+                page: b.page,
+                left: b.left,
+                top: b.top,
+                width: b.width,
+                height: b.height,
+                employee_id: b.employee_id,
+                preview_width: previewWidth,
+                preview_height: previewHeight
+            }));
+
+            fetch(`/save_box/${taskId}`, {
+                method: "POST",
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(res => res.json()).then(data => {
+                if (data.status === "success") {
+                    window.location.href = `/invite/${taskId}`;
+                } else {
+                    alert("提交失败");
+                }
+            });
+        }
+
+        window.onload = () => {
+            renderPDF(pdfUrl);
+        };
+    </script>
+</body>
+
+</html>
