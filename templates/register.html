@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>注册账号 - 签训通</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            background: linear-gradient(120deg, #6ab7ff 0%, #e5ecfa 100%);
+            min-height: 100vh;
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .center-box {
+            max-width: 400px;
+            margin: 100px auto 0 auto;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 8px 36px 0 #2e8bff22;
+            padding: 38px 28px 30px 28px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: fadeIn .7s;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(32px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            font-size: 34px;
+            margin-bottom: 12px;
+            color: #2e8bff;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 26px;
+            font-weight: 700;
+            color: #1d2d41;
+            margin-bottom: 22px;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            color: #222;
+            margin-bottom: 7px;
+            margin-top: 16px;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 13px;
+            border-radius: 8px;
+            border: 1.5px solid #e3e7ed;
+            font-size: 16px;
+            transition: border .2s;
+            margin-bottom: 5px;
+            background: #f6faff;
+        }
+
+        input:focus {
+            outline: none;
+            border: 1.5px solid #2e8bff;
+            background: #f0f8ff;
+        }
+
+        button {
+            width: 100%;
+            padding: 13px;
+            margin-top: 28px;
+            background: linear-gradient(90deg, #2e8bff 70%, #51aaff 100%);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            box-shadow: 0 2px 12px #2e8bff1a;
+            cursor: pointer;
+            transition: background .2s, box-shadow .2s;
+        }
+
+        button:hover {
+            background: linear-gradient(90deg, #166fd9 80%, #338fff 100%);
+            box-shadow: 0 4px 18px #2e8bff2e;
+        }
+
+        .to-login {
+            margin-top: 22px;
+            text-align: center;
+            color: #778aa8;
+            font-size: 15px;
+        }
+
+        .to-login a {
+            color: #2e8bff;
+            text-decoration: underline;
+            margin-left: 4px;
+        }
+
+        .to-login a:hover {
+            color: #166fd9;
+        }
+
+        .error-tip {
+            background: #ffebee;
+            color: #e53935;
+            padding: 10px 0;
+            border-radius: 7px;
+            font-size: 15px;
+            width: 100%;
+            text-align: center;
+            margin-bottom: 18px;
+        }
+
+        @media (max-width: 500px) {
+            .center-box {
+                margin: 0 0;
+                min-height: 100vh;
+                border-radius: 0;
+                box-shadow: none;
+                padding: 32px 16px 24px 16px;
+            }
+
+            .logo {
+                font-size: 26px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="center-box">
+        <div class="logo">📝</div>
+        <h2>注册新账号</h2>
+        {% if error %}
+        <div class="error-tip">{{ error }}</div>
+        {% endif %}
+        <form method="post" autocomplete="off">
+            <label for="username">用户名</label>
+            <input type="text" name="username" id="username" required autocomplete="username">
+            <label for="password">密码</label>
+            <input type="password" name="password" id="password" required autocomplete="new-password">
+            <button type="submit">注册</button>
+        </form>
+        <div class="to-login">
+            已有账号？<a href="/login">去登录</a>
+        </div>
+    </div>
+</body>
+
+</html>

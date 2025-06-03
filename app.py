@@ -18,8 +18,18 @@ from sqlalchemy import Text
 from datetime import datetime
 from pytz import timezone
 from urllib.parse import quote
+from flask_login import UserMixin
+from flask_login import (
+    LoginManager,
+    login_user,
+    logout_user,
+    login_required,
+    current_user,
+)
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = "very-secret-key-123456"
 app.config["UPLOAD_FOLDER"] = "static/uploads"
 app.config["META_FOLDER"] = "static/meta"
 app.config["FINAL_FOLDER"] = "static/final"
@@ -39,6 +49,7 @@ CHINA_TZ = timezone("Asia/Shanghai")
 
 class SignatureTask(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     task_id = db.Column(db.String(64), unique=True, nullable=False)
     title = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(CHINA_TZ))
@@ -55,6 +66,7 @@ class SignatureTask(db.Model):
 
 class SignatureStatus(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     task_id = db.Column(
         db.String(64), db.ForeignKey("signature_task.task_id"), nullable=False
     )
@@ -66,11 +78,13 @@ class SignatureStatus(db.Model):
 
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     name = db.Column(db.String(50), nullable=False)
 
 
 class QuizQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     task_id = db.Column(
         db.String(64), db.ForeignKey("signature_task.task_id"), nullable=False
     )
@@ -84,13 +98,67 @@ class QuizQuestion(db.Model):
     multiple = db.Column(db.Boolean, default=False)  # 是否为多选题
 
 
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128), nullable=False)
+
+
 def parse_answers(answer_str):
     mapping = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4, "F": 5}
     answer_str = answer_str.upper().replace(" ", "")
     return [mapping[c] for c in answer_str.split(",") if c in mapping]
 
 
+login_manager = LoginManager(app)
+login_manager.login_view = "login"
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+        if User.query.filter_by(username=username).first():
+            return render_template("register.html", error="用户名已存在")
+        user = User(username=username, password_hash=generate_password_hash(password))
+        db.session.add(user)
+        db.session.commit()
+        # 注册成功，重定向到登录页面，并带参数
+        return redirect(url_for("login", msg="注册成功，请登录"))
+    return render_template("register.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    # 优先从GET参数获取提示信息
+    msg = request.args.get("msg")
+    error = None
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password_hash, password):
+            login_user(user)
+            return redirect(url_for("index"))
+        error = "用户名或密码错误"
+    return render_template("login.html", error=error, msg=msg)
+
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+
+
 @app.route("/", methods=["GET", "POST"])
+@login_required
 def index():
     if request.method == "POST":
         title = request.form.get("title", "").strip()
@@ -111,6 +179,7 @@ def index():
 
         # ✅ 创建签名任务记录
         task = SignatureTask(
+            user_id=current_user.id,
             task_id=task_id,
             title=title,
             employee_ids=json.dumps(employee_ids),
@@ -122,7 +191,10 @@ def index():
         # ✅ 将选中的员工 ID 保存到 SignatureStatus 表中，签名状态暂设为 False
         for emp_id in employee_ids:
             status = SignatureStatus(
-                task_id=task_id, employee_id=int(emp_id), signed=False
+                user_id=current_user.id,
+                task_id=task_id,
+                employee_id=int(emp_id),
+                signed=False,
             )
             db.session.add(status)
 
@@ -146,6 +218,7 @@ def index():
                 correct_answers = []
 
             quiz = QuizQuestion(
+                user_id=current_user.id,
                 task_id=task_id,
                 content=content,
                 options=json.dumps(options, ensure_ascii=False),
@@ -159,11 +232,17 @@ def index():
         return redirect(url_for("preview", task_id=task_id))
 
     # ✅ 获取签名任务及进度信息
-    tasks = SignatureTask.query.order_by(SignatureTask.created_at.desc()).all()
+    tasks = (
+        SignatureTask.query.filter_by(user_id=current_user.id)
+        .order_by(SignatureTask.created_at.desc())
+        .all()
+    )
     task_info = []
 
     for task in tasks:
-        statuses = SignatureStatus.query.filter_by(task_id=task.task_id).all()
+        statuses = SignatureStatus.query.filter_by(
+            user_id=current_user.id, task_id=task.task_id
+        ).all()
         signed_count = sum(1 for s in statuses if s.signed)
         total_count = len(statuses)
         task_info.append(
@@ -177,22 +256,28 @@ def index():
             }
         )
 
-    employees = Employee.query.order_by(Employee.id.desc()).all()
+    employees = (
+        Employee.query.filter_by(user_id=current_user.id)
+        .order_by(Employee.id.desc())
+        .all()
+    )
     return render_template("index.html", tasks=task_info, employees=employees)
 
 
 @app.route("/employee/new", methods=["POST"])
+@login_required
 def add_employee():
     name = request.form["name"]
-    new_emp = Employee(name=name)
+    new_emp = Employee(name=name, user_id=current_user.id)
     db.session.add(new_emp)
     db.session.commit()
     return jsonify({"status": "success", "id": new_emp.id, "name": new_emp.name})
 
 
 @app.route("/employee/delete/<int:id>", methods=["POST"])
+@login_required
 def delete_employee(id):
-    emp = Employee.query.get(id)
+    emp = Employee.query.filter_by(user_id=current_user.id, id=id).first()
     if emp:
         db.session.delete(emp)
         db.session.commit()
@@ -201,6 +286,7 @@ def delete_employee(id):
 
 
 @app.route("/preview/<task_id>")
+@login_required
 def preview(task_id):
 
     meta_path = os.path.join(app.config["META_FOLDER"], f"{task_id}.json")
@@ -213,7 +299,7 @@ def preview(task_id):
 
     sign_link = app.config["SIGN_URL"] + task_id if sign_ready else None
 
-    employees_raw = Employee.query.all()
+    employees_raw = Employee.query.filter_by(user_id=current_user.id).all()
     employees = [
         {
             "id": emp.id,
@@ -222,7 +308,9 @@ def preview(task_id):
         for emp in employees_raw
     ]
 
-    task = SignatureTask.query.filter_by(task_id=task_id).first()
+    task = SignatureTask.query.filter_by(
+        user_id=current_user.id, task_id=task_id
+    ).first()
 
     uploaded_filename = next(
         (f for f in os.listdir(app.config["UPLOAD_FOLDER"]) if f.startswith(task_id)),
@@ -246,6 +334,7 @@ def preview(task_id):
 
 
 @app.route("/save_box/<task_id>", methods=["POST"])
+@login_required
 def save_box(task_id):
     # ✅ 读取提交的 box 数据
     box_data = request.get_json()
@@ -256,7 +345,9 @@ def save_box(task_id):
         json.dump(box_data, f)
 
     # ✅ 检查任务是否存在
-    task = SignatureTask.query.filter_by(task_id=task_id).first()
+    task = SignatureTask.query.filter_by(
+        user_id=current_user.id, task_id=task_id
+    ).first()
     if not task:
         return jsonify({"status": "error", "msg": "任务不存在，请重新上传文件"}), 400
 
@@ -264,7 +355,9 @@ def save_box(task_id):
     selected_ids = [int(i) for i in selected_ids]
 
     # ✅ 查询已存在的签名状态
-    existing_statuses = SignatureStatus.query.filter_by(task_id=task_id).all()
+    existing_statuses = SignatureStatus.query.filter_by(
+        user_id=current_user.id, task_id=task_id
+    ).all()
     existing_employee_ids = {s.employee_id for s in existing_statuses}
 
     # ✅ 建立新的签名状态（避免重复创建）
@@ -277,7 +370,12 @@ def save_box(task_id):
 
         if employee_id not in existing_employee_ids and employee_id in selected_ids:
             new_statuses.append(
-                SignatureStatus(task_id=task_id, employee_id=employee_id, signed=False)
+                SignatureStatus(
+                    user_id=current_user.id,
+                    task_id=task_id,
+                    employee_id=employee_id,
+                    signed=False,
+                )
             )
 
     if new_statuses:
@@ -288,6 +386,7 @@ def save_box(task_id):
 
 
 @app.route("/sign/<task_id>")
+@login_required
 def sign_page(task_id):
     meta_path = os.path.join(app.config["META_FOLDER"], f"{task_id}.json")
     if not os.path.exists(meta_path):
@@ -304,8 +403,11 @@ def sign_page(task_id):
 
 
 @app.route("/submit_sign/<task_id>", methods=["POST"])
+@login_required
 def submit_sign(task_id):
-    task = SignatureTask.query.filter_by(task_id=task_id).first()
+    task = SignatureTask.query.filter_by(
+        user_id=current_user.id, task_id=task_id
+    ).first()
     if task and task.is_completed:
         return jsonify({"status": "error", "msg": "该签名任务已完成，无法提交签名"})
 
@@ -352,14 +454,16 @@ def submit_sign(task_id):
 
     # ✅ 更新数据库中的签名状态
     sig_status = SignatureStatus.query.filter_by(
-        task_id=task_id, employee_id=int(employee_id)
+        user_id=current_user.id, task_id=task_id, employee_id=int(employee_id)
     ).first()
     if sig_status and not sig_status.signed:
         sig_status.signed = True
         db.session.commit()
 
     # ✅ 检查是否所有人都签完，才触发合成 PDF
-    all_statuses = SignatureStatus.query.filter_by(task_id=task_id).all()
+    all_statuses = SignatureStatus.query.filter_by(
+        user_id=current_user.id, task_id=task_id
+    ).all()
     if all(s.signed for s in all_statuses):
         print("📄 所有签名区域已签名，开始合成 PDF")
 
@@ -407,11 +511,13 @@ def submit_sign(task_id):
 
 
 @app.route("/sign_submitted/<task_id>")
+@login_required
 def sign_submitted(task_id):
     return render_template("sign_submitted.html", task_id=task_id)
 
 
 @app.route("/invite/<task_id>")
+@login_required
 def invite_page(task_id):
     meta_path = os.path.join(app.config["META_FOLDER"], f"{task_id}.json")
     if not os.path.exists(meta_path):
@@ -421,7 +527,11 @@ def invite_page(task_id):
         boxes = json.load(f)
 
     employee_ids = list({int(b["employee_id"]) for b in boxes})
-    employees = Employee.query.filter(Employee.id.in_(employee_ids)).all()
+    employees = (
+        Employee.query.filter_by(user_id=current_user.id)
+        .filter(Employee.id.in_(employee_ids))
+        .all()
+    )
 
     signed_ids = set()
     for box in boxes:
@@ -446,11 +556,16 @@ def sign_canvas(task_id, employee_id):
 
 
 @app.route("/delete_record/<task_id>", methods=["POST"])
+@login_required
 def delete_record(task_id):
-    task = SignatureTask.query.filter_by(task_id=task_id).first()
+    task = SignatureTask.query.filter_by(
+        user_id=current_user.id, task_id=task_id
+    ).first()
     if task:
         # 删除关联签名状态
-        SignatureStatus.query.filter_by(task_id=task_id).delete()
+        SignatureStatus.query.filter_by(
+            user_id=current_user.id, task_id=task_id
+        ).delete()
 
         # 删除任务本身
         db.session.delete(task)
@@ -477,8 +592,11 @@ def delete_record(task_id):
 
 
 @app.route("/sign_select/<task_id>", methods=["GET", "POST"])
+@login_required
 def sign_select(task_id):
-    task = SignatureTask.query.filter_by(task_id=task_id).first()
+    task = SignatureTask.query.filter_by(
+        user_id=current_user.id, task_id=task_id
+    ).first()
     if task and task.is_completed:
         return "该签名任务已完成，无法继续签名", 403
 
@@ -497,21 +615,28 @@ def sign_select(task_id):
         boxes = json.load(f)
 
     employee_ids = set(b["employee_id"] for b in boxes)
-    employees = Employee.query.filter(Employee.id.in_(employee_ids)).all()
+    employees = (
+        Employee.query.filter_by(user_id=current_user.id)
+        .filter(Employee.id.in_(employee_ids))
+        .all()
+    )
 
     return render_template("sign_select.html", task_id=task_id, employees=employees)
 
 
 @app.route("/sign/<task_id>/<int:employee_id>")
+@login_required
 def sign_page_employee(task_id, employee_id):
     # ✅ 获取任务
-    task = SignatureTask.query.filter_by(task_id=task_id).first()
+    task = SignatureTask.query.filter_by(
+        user_id=current_user.id, task_id=task_id
+    ).first()
     if not task:
         return "签名任务不存在", 404
 
     # ✅ 检查是否任务已完成
     status = SignatureStatus.query.filter_by(
-        task_id=task_id, employee_id=employee_id
+        user_id=current_user.id, task_id=task_id, employee_id=employee_id
     ).first()
     if status and status.signed:
         return "您已完成签名，无法再次签名", 403
@@ -542,7 +667,7 @@ def sign_page_employee(task_id, employee_id):
         return "PDF 文件未找到", 404
 
     encoded_title = quote(uploaded_filename)
-    employee = Employee.query.get(employee_id)
+    employee = Employee.query.filter_by(user_id=current_user.id, id=employee_id).first()
     employee_name = employee.name if employee else ""
 
     return render_template(
@@ -558,12 +683,17 @@ def sign_page_employee(task_id, employee_id):
 
 
 @app.route("/sign_quiz/<task_id>/<int:employee_id>", methods=["GET", "POST"])
+@login_required
 def quiz_page(task_id, employee_id):
-    task = SignatureTask.query.filter_by(task_id=task_id).first()
+    task = SignatureTask.query.filter_by(
+        user_id=current_user.id, task_id=task_id
+    ).first()
     if not task:
         return jsonify({"success": False, "msg": "签名任务不存在"}), 404
 
-    questions = QuizQuestion.query.filter_by(task_id=task_id).all()
+    questions = QuizQuestion.query.filter_by(
+        user_id=current_user.id, task_id=task_id
+    ).all()
 
     if request.method == "POST":
         # 用 request.json 读取 AJAX 数据
@@ -587,7 +717,7 @@ def quiz_page(task_id, employee_id):
 
         # 更新当前员工 quiz_passed 状态
         status = SignatureStatus.query.filter_by(
-            task_id=task_id, employee_id=employee_id
+            user_id=current_user.id, task_id=task_id, employee_id=employee_id
         ).first()
         if status:
             status.quiz_passed = True  # ✅ 标记通过
@@ -621,5 +751,10 @@ def quiz_page(task_id, employee_id):
     )
 
 
+# 本地调试
 if __name__ == "__main__":
     app.run(debug=True)
+
+# 局域网调试
+# if __name__ == "__main__":
+#     app.run(host="0.0.0.0", port=5001, debug=True)

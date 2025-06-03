@@ -14,16 +14,32 @@
             font-family: "Segoe UI", "Helvetica Neue", sans-serif;
             background-color: #f0f2f5;
             color: #333;
+            min-height: 100vh;
         }
 
+
         .header {
-            background-color: #2e8bff;
-            color: white;
+            background: #2e8bff;
+            color: #fff;
             padding: 20px 30px;
-            font-size: 24px;
+            font-size: 25px;
             font-weight: 600;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 8px #1b2f6d18;
             text-align: center;
+            border-bottom-left-radius: 18px;
+            border-bottom-right-radius: 18px;
+            letter-spacing: 1.5px;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+
+        .header span {
+            float: right;
+            font-size: 17px;
+            opacity: 0.92;
+            font-weight: 400;
+            letter-spacing: 0;
         }
 
         .container {
@@ -32,124 +48,137 @@
         }
 
         .sidebar {
-            width: 220px;
-            background-color: #fff;
-            border-right: 1px solid #e0e0e0;
-            padding-top: 30px;
+            width: 230px;
+            background: #fff;
+            border-right: 1.5px solid #e0e0e0;
+            padding: 35px 0 0 0;
+            box-shadow: 1px 0 6px #d3e7fa33;
         }
 
         .sidebar a {
             display: block;
-            padding: 14px 24px;
-            color: #2e2e2e;
+            padding: 15px 28px;
+            color: #34495e;
+            font-size: 17px;
             text-decoration: none;
-            font-size: 16px;
             border-left: 4px solid transparent;
-            transition: 0.2s;
+            border-radius: 0 18px 18px 0;
+            margin-bottom: 8px;
+            transition: 0.23s cubic-bezier(.4, 0, .2, 1);
+            font-weight: 500;
         }
 
-        .sidebar a:hover {
-            background-color: #f5f7fa;
+        .sidebar a:hover,
+        .sidebar a.active {
+            background: #f5f7fa;
             border-left: 4px solid #2e8bff;
             color: #2e8bff;
+            box-shadow: 0 1.5px 8px #e7f1ff44;
         }
+
+        .sidebar a[style*="e74c3c"] {
+            font-weight: bold;
+        }
+
 
         .content {
             flex-grow: 1;
-            padding: 40px;
+            padding: 48px 38px;
             overflow-y: auto;
         }
 
         .upload-box {
-            background-color: #fff;
-            padding: 30px;
-            max-width: 600px;
+            background: #fff;
+            padding: 35px 38px;
+            max-width: 660px;
             margin: auto;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-            border-radius: 12px;
+            margin-bottom: 36px;
+            box-shadow: 0 6px 24px #1b2f6d13;
+            border-radius: 18px;
+            border: 1.5px solid #f0f3fa;
         }
 
         .upload-box h2 {
-            margin-bottom: 30px;
+            margin-bottom: 25px;
+            font-size: 22px;
+            color: #2e8bff;
+            font-weight: 600;
+            letter-spacing: 1px;
         }
 
         .upload-box label {
             display: block;
             text-align: left;
             font-weight: 500;
-            margin-bottom: 6px;
-            margin-top: 14px;
+            margin-bottom: 7px;
+            margin-top: 18px;
         }
 
         .upload-box input[type="file"],
         .upload-box input[type="text"] {
             width: 100%;
-            padding: 10px 12px;
-            margin-bottom: 14px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font-size: 15px;
+            padding: 12px 14px;
+            margin-bottom: 17px;
+            border: 1px solid #c7d0db;
+            border-radius: 8px;
+            font-size: 16px;
+            background: #f8fafc;
         }
 
         .upload-box button {
-            background-color: #2e8bff;
+            background: #2e8bff;
             color: white;
-            padding: 12px 20px;
+            padding: 13px 0;
             border: none;
-            font-size: 16px;
+            font-size: 17px;
             border-radius: 8px;
             cursor: pointer;
             width: 100%;
-            margin-top: 10px;
+            margin-top: 14px;
+            box-shadow: 0 2px 10px #1b2f6d11;
+            transition: background .15s;
         }
 
         .upload-box button:hover {
-            background-color: #1a6fe2;
+            background: #166fd9;
         }
 
         .record-table {
             width: 100%;
-            background-color: #fff;
-            border-collapse: collapse;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
-            border-radius: 8px;
+            background: #fff;
+            border-collapse: separate;
+            border-spacing: 0;
+            box-shadow: 0 4px 12px #1b2f6d13;
+            border-radius: 12px;
+            margin-top: 22px;
             overflow: hidden;
-            margin-top: 30px;
         }
 
         .record-table th,
         .record-table td {
-            padding: 14px 18px;
-            border-bottom: 1px solid #f0f0f0;
+            padding: 14px 20px;
+            border-bottom: 1.5px solid #f0f0f0;
             text-align: center;
-            font-size: 15px;
+            font-size: 16px;
         }
 
         .record-table th {
-            background-color: #f9fafb;
+            background: #f9fafb;
             font-weight: bold;
+            color: #1b2f6d;
+            border-top: 1.5px solid #dde8fa;
         }
 
-        .record-table tr:nth-child(even) {
-            background-color: #fafafa;
+        .record-table tr:hover {
+            background: #f4f8fd;
         }
 
-        .record-table a {
-            color: #2e8bff;
-            text-decoration: none;
-        }
-
+        .record-table a,
         .record-table button {
-            padding: 6px 12px;
-            background-color: #e74c3c;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-
-        .record-table button:hover {
-            background-color: #c0392b;
+            font-size: 15px;
+            border-radius: 7px;
+            margin: 0 3px;
+            box-shadow: none;
         }
 
         input[type="text"] {
@@ -160,51 +189,42 @@
             font-size: 14px;
         }
 
-        .btn-delete {
-            background-color: #e74c3c;
-        }
-
-        .btn-add {
-            background-color: #27ae60;
-            color: white;
-            border: none;
-            padding: 8px 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            margin-left: 8px;
-        }
-
-        .btn-add:hover {
-            background-color: #219150;
-        }
-
-        .btn-view,
-        .btn-download {
-            display: inline-block;
-            padding: 6px 14px;
-            border-radius: 6px;
-            text-decoration: none !important;
-            font-size: 14px;
-            font-weight: 500;
-            color: white !important;
-            /* ✅ 强制字体颜色为白色 */
-            transition: background-color 0.2s ease;
-        }
-
         .btn-view {
-            background-color: #3498db;
+            background: #3498db;
+            color: #fff !important;
+            padding: 7px 18px;
+            border: none;
+            text-decoration: none !important;
+            transition: background .17s;
         }
 
         .btn-view:hover {
-            background-color: #2980b9;
+            background: #2980b9;
         }
 
         .btn-download {
-            background-color: #2ecc71;
+            background: #2ecc71;
+            color: #fff !important;
+            padding: 7px 18px;
+            border: none;
+            text-decoration: none !important;
+            transition: background .17s;
         }
 
         .btn-download:hover {
-            background-color: #27ae60;
+            background: #219150;
+        }
+
+        .btn-delete {
+            background: #e74c3c;
+            color: #fff !important;
+            border: none;
+            padding: 7px 18px;
+            transition: background .13s;
+        }
+
+        .btn-delete:hover {
+            background: #c0392b;
         }
 
         .employee-select-container {
@@ -395,13 +415,20 @@
 
 <body>
 
-    <div class="header">📝 签训通 - 智能签名培训答题系统</div>
+    <div class="header">
+        📝 签训通 - 智能签名培训答题系统
+        <span style="float:right;font-size:17px;">👤 {{ current_user.username }}</span>
+    </div>
 
     <div class="container">
         <div class="sidebar">
             <a href="#upload" onclick="navigateAndRemember('upload')">📥 上传文件</a>
             <a href="#records" onclick="navigateAndRemember('records')">📄 签名记录</a>
             <a href="#employees" onclick="navigateAndRemember('employees')">👥 员工管理</a>
+            <a href="http://smartplatex.yourdomain.com" target="_blank" style="color:#24a572;font-weight:bold;">
+                🚗 车牌识别系统
+            </a>
+            <a href="/logout" style="color:#e74c3c;">🔑 退出登录</a>
         </div>
 
         <div class="content">
