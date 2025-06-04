@@ -77,9 +77,11 @@ class SignatureStatus(db.Model):
 
 
 class Employee(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)  # 物理主键
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    local_id = db.Column(db.Integer, nullable=False)  # 用户空间自增逻辑id
     name = db.Column(db.String(50), nullable=False)
+    __table_args__ = (db.UniqueConstraint("user_id", "local_id"),)  # 保证唯一
 
 
 class QuizQuestion(db.Model):
@@ -258,7 +260,7 @@ def index():
 
     employees = (
         Employee.query.filter_by(user_id=current_user.id)
-        .order_by(Employee.id.desc())
+        .order_by(Employee.local_id.desc())
         .all()
     )
     return render_template("index.html", tasks=task_info, employees=employees)
@@ -268,16 +270,24 @@ def index():
 @login_required
 def add_employee():
     name = request.form["name"]
-    new_emp = Employee(name=name, user_id=current_user.id)
+    # 查找该用户下已有员工最大local_id
+    max_local = (
+        db.session.query(db.func.max(Employee.local_id))
+        .filter_by(user_id=current_user.id)
+        .scalar()
+    )
+    next_local_id = 1 if max_local is None else max_local + 1
+
+    new_emp = Employee(name=name, user_id=current_user.id, local_id=next_local_id)
     db.session.add(new_emp)
     db.session.commit()
-    return jsonify({"status": "success", "id": new_emp.id, "name": new_emp.name})
+    return jsonify({"status": "success", "id": new_emp.local_id, "name": new_emp.name})
 
 
-@app.route("/employee/delete/<int:id>", methods=["POST"])
+@app.route("/employee/delete/<int:local_id>", methods=["POST"])
 @login_required
-def delete_employee(id):
-    emp = Employee.query.filter_by(user_id=current_user.id, id=id).first()
+def delete_employee(local_id):
+    emp = Employee.query.filter_by(user_id=current_user.id, local_id=local_id).first()
     if emp:
         db.session.delete(emp)
         db.session.commit()
@@ -302,7 +312,7 @@ def preview(task_id):
     employees_raw = Employee.query.filter_by(user_id=current_user.id).all()
     employees = [
         {
-            "id": emp.id,
+            "local_id": emp.local_id,
             "name": emp.name,
         }
         for emp in employees_raw
@@ -529,7 +539,7 @@ def invite_page(task_id):
     employee_ids = list({int(b["employee_id"]) for b in boxes})
     employees = (
         Employee.query.filter_by(user_id=current_user.id)
-        .filter(Employee.id.in_(employee_ids))
+        .filter(Employee.local_id.in_(employee_ids))
         .all()
     )
 
@@ -617,7 +627,7 @@ def sign_select(task_id):
     employee_ids = set(b["employee_id"] for b in boxes)
     employees = (
         Employee.query.filter_by(user_id=current_user.id)
-        .filter(Employee.id.in_(employee_ids))
+        .filter(Employee.local_id.in_(employee_ids))
         .all()
     )
 
@@ -667,7 +677,9 @@ def sign_page_employee(task_id, employee_id):
         return "PDF 文件未找到", 404
 
     encoded_title = quote(uploaded_filename)
-    employee = Employee.query.filter_by(user_id=current_user.id, id=employee_id).first()
+    employee = Employee.query.filter_by(
+        user_id=current_user.id, local_id=employee_id
+    ).first()
     employee_name = employee.name if employee else ""
 
     return render_template(

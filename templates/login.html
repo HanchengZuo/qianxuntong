@@ -6,15 +6,29 @@
     <title>登录 - 签训通</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
+        html,
         body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
             background: linear-gradient(120deg, #6ab7ff 0%, #e5ecfa 100%);
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
             min-height: 100vh;
+            min-width: 100vw;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
             font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
         }
 
         .center-box {
+            width: 100%;
             max-width: 400px;
-            margin: 100px auto 0 auto;
             background: #fff;
             border-radius: 16px;
             box-shadow: 0 8px 36px 0 #2e8bff22;
@@ -39,8 +53,19 @@
 
         .logo {
             font-size: 34px;
-            margin-bottom: 12px;
+            margin-bottom: 6px;
             color: #2e8bff;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+        }
+
+        .system-title {
+            font-size: 17px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            color: #497ed6;
+            margin-bottom: 18px;
+            margin-top: -2px;
         }
 
         h2 {
@@ -51,17 +76,28 @@
             margin-bottom: 22px;
         }
 
+        .form-area {
+            width: 100%;
+            max-width: 344px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
         label {
             display: block;
             font-weight: 500;
             color: #222;
             margin-bottom: 7px;
             margin-top: 16px;
+            width: 100%;
+            text-align: left;
         }
 
         input[type="text"],
         input[type="password"] {
             width: 100%;
+            box-sizing: border-box;
             padding: 13px;
             border-radius: 8px;
             border: 1.5px solid #e3e7ed;
@@ -79,6 +115,7 @@
 
         button {
             width: 100%;
+            box-sizing: border-box;
             padding: 13px;
             margin-top: 28px;
             background: linear-gradient(90deg, #2e8bff 70%, #51aaff 100%);
@@ -114,6 +151,18 @@
             color: #166fd9;
         }
 
+        .success-tip {
+            color: #27ae60;
+            background: #eafbe7;
+            border: 1px solid #b9eab7;
+            border-radius: 7px;
+            margin-bottom: 12px;
+            padding: 10px;
+            width: 100%;
+            text-align: center;
+            font-size: 15px;
+        }
+
         .error-tip {
             background: #ffebee;
             color: #e53935;
@@ -127,11 +176,14 @@
 
         @media (max-width: 500px) {
             .center-box {
-                margin: 0 0;
-                min-height: 100vh;
+                max-width: 95vw;
+                padding: 30px 8vw 24px 8vw;
                 border-radius: 0;
                 box-shadow: none;
-                padding: 32px 16px 24px 16px;
+            }
+
+            .form-area {
+                max-width: 100vw;
             }
 
             .logo {
@@ -141,24 +193,20 @@
     </style>
 </head>
 
-<!-- login.html -->
-
 <body>
     <div class="center-box">
+        <div style="width:100%;display:flex;flex-direction:column;align-items:center;">
+            <div class="logo">📝 签训通</div>
+            <div class="system-title">智能签名与培训答题系统</div>
+        </div>
         <h2>登录</h2>
         {% if msg %}
-        <div
-            style="color: #27ae60; background: #eafbe7; border: 1px solid #b9eab7; border-radius: 7px; margin-bottom: 12px; padding: 10px;">
-            {{ msg }}
-        </div>
+        <div class="success-tip">{{ msg }}</div>
         {% endif %}
         {% if error %}
-        <div
-            style="color: #e74c3c; background: #fbeaea; border: 1px solid #f5bdbd; border-radius: 7px; margin-bottom: 16px; padding: 10px;">
-            {{ error }}
-        </div>
+        <div class="error-tip">{{ error }}</div>
         {% endif %}
-        <form method="post">
+        <form method="post" class="form-area" autocomplete="off">
             <label for="username">用户名</label>
             <input type="text" name="username" id="username" required>
             <label for="password">密码</label>
@@ -168,6 +216,5 @@
         <div class="to-register">没有账号？<a href="/register">注册</a></div>
     </div>
 </body>
-
 
 </html>

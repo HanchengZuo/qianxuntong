@@ -121,7 +121,7 @@
         const selectedEmployeeIds = {{ record.get_employee_ids() | tojson }};
 
         // ✅ 当前任务中被选中的员工对象列表
-        const selectedEmployees = employees.filter(e => selectedEmployeeIds.includes(e.id.toString()));
+        const selectedEmployees = employees.filter(e => selectedEmployeeIds.includes(e.local_id.toString()));
 
         const pdfUrl = "/static/uploads/{{ encoded_title }}";
 
@@ -204,7 +204,7 @@
                             currentBox = null;
 
                             // 获取尚未分配的员工
-                            const remainingEmployees = selectedEmployees.filter(emp => !usedEmployeeIds.has(emp.id));
+                            const remainingEmployees = selectedEmployees.filter(emp => !usedEmployeeIds.has(emp.local_id));
                             const count = remainingEmployees.length;
                             if (count === 0) {
                                 alert("⚠️ 所有员工已分配！");
@@ -253,7 +253,7 @@
                                     box.appendChild(closeBtn);
                                     container.appendChild(box);
 
-                                    usedEmployeeIds.add(emp.id);
+                                    usedEmployeeIds.add(emp.local_id);
 
                                     boxes.push({
                                         page: pageNum,
@@ -261,7 +261,7 @@
                                         top: subTop,
                                         width: boxWidth,
                                         height: boxHeight,
-                                        employee_id: emp.id,
+                                        employee_id: emp.local_id,
                                         element: box
                                     });
                                 }

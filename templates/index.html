@@ -455,17 +455,29 @@
 
     <div class="container">
         <div class="sidebar">
-            <a href="#upload" onclick="navigateAndRemember('upload')">📥 上传文件</a>
+            <!-- 签名答题系统 -->
+            <div class="sidebar-section-title">签名答题系统</div>
+            <a href="#upload" onclick="navigateAndRemember('upload')">📥 签名发布</a>
             <a href="#records" onclick="navigateAndRemember('records')">📄 签名记录</a>
+            <div class="sidebar-divider"></div>
+
+            <!-- 培训答题系统 -->
+            <div class="sidebar-section-title">培训答题系统</div>
+            <a href="#training-task" onclick="navigateAndRemember('training-task')">🚀 培训发布</a>
+            <a href="#training-materials" onclick="navigateAndRemember('training-materials')">📚 培训材料</a>
+            <a href="#question-bank" onclick="navigateAndRemember('question-bank')">🧠 培训题库</a>
+            <a href="#training-stats" onclick="navigateAndRemember('training-stats')">📊 培训记录</a>
+            <div class="sidebar-divider"></div>
+
             <a href="#employees" onclick="navigateAndRemember('employees')">👥 员工管理</a>
             <a href="/logout" style="color:#e74c3c;">🔑 退出登录</a>
             <div class="sidebar-divider"></div>
+
             <div class="sidebar-section-title">扩展系统</div>
             <a href="https://smartplatex.hanchengzuo.com" target="_blank" class="vehicle-link">
-                🚗 车辆控制系统
+                🚗 车牌识别
             </a>
         </div>
-
 
 
         <div class="content">
@@ -484,8 +496,8 @@
                             <div class="employee-list">
                                 {% for emp in employees %}
                                 <label class="employee-item">
-                                    <input type="checkbox" name="employee_ids" value="{{ emp.id }}">
-                                    <span>{{ emp.name }} <small>(#{{ emp.id }})</small></span>
+                                    <input type="checkbox" name="employee_ids" value="{{ emp.local_id }}">
+                                    <span>{{ emp.name }} <small>(#{{ emp.local_id }})</small></span>
                                 </label>
                                 {% endfor %}
                             </div>
@@ -568,12 +580,11 @@
                     <tbody>
                         {% for emp in employees %}
                         <tr>
-                            <td>{{ emp.id }}</td>
+                            <td>{{ emp.local_id }}</td>
                             <td>{{ emp.name }}</td>
                             <td>
-                                <button class="btn-delete" onclick="deleteEmployee({{ emp.id }}, this, event)">🗑
+                                <button class="btn-delete" onclick="deleteEmployee({{ emp.local_id }}, this, event)">🗑
                                     删除</button>
-
                             </td>
                         </tr>
                         {% endfor %}
@@ -636,11 +647,11 @@
                     const tbody = document.querySelector('#employees-section tbody');
                     const tr = document.createElement("tr");
                     tr.innerHTML = `
-        <td>${data.id}</td>
-        <td>${data.name}</td>
-        <td>
-            <button class="btn-delete" onclick="deleteEmployee(${data.id}, event, this)">🗑 删除</button>
-        </td>`;
+                        <td>${data.id}</td>
+                        <td>${data.name}</td>
+                        <td>
+                            <button class="btn-delete" onclick="deleteEmployee(${data.id}, this, event)">🗑 删除</button>
+                        </td>`;
                     tbody.prepend(tr);
                     nameInput.value = '';
                 }
