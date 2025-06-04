@@ -4,6 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <title>签训通 - 签名填写</title>
+    <!-- 适配移动端 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+
     <style>
         body {
             margin: 0;
@@ -20,41 +23,75 @@
             font-weight: bold;
         }
 
+        .top-bar h2 {
+            font-size: 20px;
+            margin: 0;
+        }
+
         .pdf-container {
-            width: fit-content;
-            margin: 30px auto;
+            width: 100%;
+            max-width: 900px;
+            /* ⭐ PC端最大宽度 */
+            margin: 24px auto 0 auto;
             background: white;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             position: relative;
+            overflow-x: auto;
+        }
+
+        #pdf-wrapper {
+            overflow-x: auto;
+            /* 横向滑动，适配超宽PDF */
+            padding-bottom: 8px;
         }
 
         canvas {
             display: block;
-            width: auto;
+            width: 100%;
+            /* 让PDF宽度适配容器 */
+            height: auto !important;
+            max-width: 900px;
+            /* ⭐ 保持与容器一致 */
+            margin: 0 auto;
         }
 
         .btn-bar {
             text-align: center;
-            margin: 40px 0;
+            margin: 32px 0 20px 0;
         }
 
         .btn-bar button {
-            padding: 10px 20px;
-            font-size: 16px;
-            margin: 0 10px;
-            cursor: pointer;
-            border: none;
-            border-radius: 6px;
+            font-size: 17px;
+            padding: 13px 32px;
+            /* 移动端稍微更大一些 */
+            margin: 12px 10px 0 10px;
+            width: auto;
+            /* 宽度由内容决定，不要写vw */
+            min-width: 140px;
+            /* 可设置一个最小宽度保证容易点到 */
+            box-sizing: border-box;
+            display: inline-block;
         }
 
-        .btn-sign {
-            background-color: #2ecc71;
-            color: white;
-        }
-
+        .btn-sign,
         .btn-submit {
-            background-color: #2e8bff;
-            color: white;
+            display: inline-block;
+            min-width: 120px;
+            padding: 13px 28px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+            border: none;
+            border-radius: 32px;
+            background: linear-gradient(90deg, #2ecc71 0%, #27ae60 100%);
+            box-shadow: 0 4px 16px #2ecc7133;
+            cursor: pointer;
+            transition: all 0.18s cubic-bezier(.4, 0, .2, 1);
+            margin: 12px 10px 0 10px;
+            letter-spacing: 1px;
+            outline: none;
+            position: relative;
+            overflow: hidden;
         }
 
         .btn-sign:hover {
@@ -63,6 +100,25 @@
 
         .btn-submit:hover {
             background-color: #1a6fe2;
+        }
+
+        .btn-sign:active,
+        .btn-sign:focus {
+            background: linear-gradient(90deg, #219150 0%, #27ae60 100%);
+            box-shadow: 0 2px 8px #2ecc7133;
+            transform: scale(0.97);
+        }
+
+        .btn-submit {
+            background: linear-gradient(90deg, #2e8bff 0%, #166fd9 100%);
+            box-shadow: 0 4px 16px #2e8bff22;
+        }
+
+        .btn-submit:active,
+        .btn-submit:focus {
+            background: linear-gradient(90deg, #166fd9 0%, #2562b4 100%);
+            box-shadow: 0 2px 8px #2e8bff22;
+            transform: scale(0.97);
         }
 
         .signature-placeholder {
@@ -96,6 +152,66 @@
             text-align: center;
             padding: 2px;
         }
+
+        /* 移动端适配 */
+        @media (max-width: 600px) {
+
+            .btn-sign,
+            .btn-submit {
+                font-size: 17px;
+                min-width: 70vw;
+                max-width: 95vw;
+                padding: 13px 0;
+                margin: 10px 0 0 0;
+                border-radius: 22px;
+            }
+
+            .top-bar,
+            .top-bar h2 {
+                font-size: 16px;
+            }
+
+            .pdf-container {
+                margin: 12px 0;
+            }
+
+            .btn-bar {
+                margin: 24px 0 16px 0;
+            }
+
+            .btn-bar button {
+                font-size: 18px;
+                padding: 14px 28px;
+                min-width: 65vw;
+                max-width: 95vw;
+            }
+
+            .sig-name {
+                font-size: 12px;
+            }
+        }
+
+        @media (max-width: 400px) {
+
+            .top-bar,
+            .top-bar h2 {
+                font-size: 14px;
+            }
+
+            .btn-bar button {
+                font-size: 14px;
+                padding: 8px 6px;
+            }
+        }
+
+        @media (max-width: 1000px) {
+
+            .pdf-container,
+            canvas {
+                max-width: 98vw;
+                /* 小屏自动自适应 */
+            }
+        }
     </style>
 </head>
 
@@ -108,11 +224,12 @@
 
     <div class="btn-bar" id="sign-bar">
         {% if quiz_required and not quiz_passed %}
-        <button type="button" class="btn-sign" style="background:#e67e22;"
-            onclick="location.href='/sign_quiz/{{ task_id }}/{{ employee_id }}'">
+        <button type="button" class="btn-sign" onclick="location.href='/sign_quiz/{{ task_id }}/{{ employee_id }}'">
             📝 去答题
         </button>
-        <span style="color:#aaa;font-size:16px; margin-left:20px;">答题通过后才能签名</span>
+        <div style="color:#aaa;font-size:16px; margin:10px 0 0 0; text-align:center;">
+            答题通过后才能签名
+        </div>
         {% else %}
         <button type="button" class="btn-sign" onclick="goToSignCanvas()">✍️ 开始签名</button>
         <button type="button" class="btn-submit" onclick="submitSignature()">✅ 提交签名</button>
@@ -153,6 +270,7 @@
 
                         const container = document.createElement("div");
                         container.className = "pdf-container";
+                        container.style.position = "relative"; // 确保绝对定位有效
 
                         const canvas = document.createElement("canvas");
                         const context = canvas.getContext("2d");
@@ -160,59 +278,75 @@
                         canvas.height = viewport.height;
                         container.appendChild(canvas);
 
+                        // 页面自适应宽度
+                        canvas.style.width = "100%";
+                        canvas.style.height = "auto";
+                        // 记录pdf原始宽高
+                        const pdfOriginWidth = viewport.width;
+                        const pdfOriginHeight = viewport.height;
+
                         if (pageNum === 1) {
-                            previewWidth = canvas.width;
-                            previewHeight = canvas.height;
+                            previewWidth = pdfOriginWidth;
+                            previewHeight = pdfOriginHeight;
                         }
 
-                        page.render({ canvasContext: context, viewport });
+                        page.render({ canvasContext: context, viewport }).promise.then(() => {
+                            // 注意必须等渲染完获取真实DOM宽高
+                            // 取canvas实际渲染出来的宽度
+                            const realWidth = canvas.getBoundingClientRect().width;
+                            const realHeight = canvas.getBoundingClientRect().height;
+                            // 缩放比例
+                            const scaleX = realWidth / pdfOriginWidth;
+                            const scaleY = realHeight / pdfOriginHeight;
 
-                        // 当前页中该员工的签名框
-                        boxes.filter(b => b.page === pageNum && b.employee_id == employeeId).forEach(b => {
-                            const boxLeft = b.left + "px";
-                            const boxTop = b.top + "px";
-                            const boxWidth = b.width + "px";
-                            const boxHeight = b.height + "px";
+                            // 当前页中该员工的签名框
+                            boxes.filter(b => b.page === pageNum && b.employee_id == employeeId).forEach(b => {
+                                // 按真实渲染比例缩放
+                                const boxLeft = b.left * scaleX + "px";
+                                const boxTop = b.top * scaleY + "px";
+                                const boxWidth = b.width * scaleX + "px";
+                                const boxHeight = b.height * scaleY + "px";
 
-                            if (b.signed && b.image) {
-                                const img = document.createElement("img");
-                                img.src = b.image;
-                                img.style.width = boxWidth;
-                                img.style.height = boxHeight;
-                                img.style.position = "absolute";
-                                img.style.left = boxLeft;
-                                img.style.top = boxTop;
-                                img.style.zIndex = 20;
-                                img.style.pointerEvents = "none";
-                                container.appendChild(img);
-                            } else if (signatureImg) {
-                                const img = document.createElement("img");
-                                img.src = signatureImg;
-                                img.style.width = boxWidth;
-                                img.style.height = boxHeight;
-                                img.style.position = "absolute";
-                                img.style.left = boxLeft;
-                                img.style.top = boxTop;
-                                img.style.zIndex = 20;
-                                img.style.pointerEvents = "none";
-                                container.appendChild(img);
-                            } else {
-                                const nameDiv = document.createElement("div");
-                                nameDiv.className = "signature-placeholder";
-                                nameDiv.style.left = boxLeft;
-                                nameDiv.style.top = boxTop;
-                                nameDiv.style.width = boxWidth;
-                                nameDiv.style.height = boxHeight;
-                                nameDiv.style.border = "2px dashed gray";
-                                nameDiv.style.backgroundColor = "transparent";
-                                nameDiv.style.animation = "none";
+                                if (b.signed && b.image) {
+                                    const img = document.createElement("img");
+                                    img.src = b.image;
+                                    img.style.width = boxWidth;
+                                    img.style.height = boxHeight;
+                                    img.style.position = "absolute";
+                                    img.style.left = boxLeft;
+                                    img.style.top = boxTop;
+                                    img.style.zIndex = 20;
+                                    img.style.pointerEvents = "none";
+                                    container.appendChild(img);
+                                } else if (signatureImg) {
+                                    const img = document.createElement("img");
+                                    img.src = signatureImg;
+                                    img.style.width = boxWidth;
+                                    img.style.height = boxHeight;
+                                    img.style.position = "absolute";
+                                    img.style.left = boxLeft;
+                                    img.style.top = boxTop;
+                                    img.style.zIndex = 20;
+                                    img.style.pointerEvents = "none";
+                                    container.appendChild(img);
+                                } else {
+                                    const nameDiv = document.createElement("div");
+                                    nameDiv.className = "signature-placeholder";
+                                    nameDiv.style.left = boxLeft;
+                                    nameDiv.style.top = boxTop;
+                                    nameDiv.style.width = boxWidth;
+                                    nameDiv.style.height = boxHeight;
+                                    nameDiv.style.border = "2px dashed gray";
+                                    nameDiv.style.backgroundColor = "transparent";
+                                    nameDiv.style.animation = "none";
 
-                                const label = document.createElement("div");
-                                label.className = "sig-name";
-                                label.textContent = employeeName;
-                                nameDiv.appendChild(label);
-                                container.appendChild(nameDiv);
-                            }
+                                    const label = document.createElement("div");
+                                    label.className = "sig-name";
+                                    label.textContent = employeeName;
+                                    nameDiv.appendChild(label);
+                                    container.appendChild(nameDiv);
+                                }
+                            });
                         });
 
                         wrapper.appendChild(container);

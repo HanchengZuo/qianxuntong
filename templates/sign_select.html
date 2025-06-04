@@ -1,8 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 
 <head>
+    <meta charset="UTF-8">
     <title>签训通 - 签名人选择</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
             font-family: sans-serif;
@@ -16,21 +18,69 @@
 
         .form-box {
             background: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 30px 28px;
+            border-radius: 12px;
+            box-shadow: 0 0 16px rgba(0, 0, 0, 0.07);
             text-align: center;
+            width: 370px;
+            max-width: 96vw;
+            /* 移动端时不会超出屏幕 */
+            margin: 16px;
         }
 
         select,
         button {
-            font-size: 16px;
-            padding: 8px 12px;
-            margin-top: 10px;
+            font-size: 17px;
+            padding: 11px 12px;
+            margin-top: 16px;
+            border-radius: 7px;
+            width: 100%;
+            /* 拉满父容器 */
+            box-sizing: border-box;
+        }
+
+        select {
+            border: 1.5px solid #e0e6ee;
+            margin-bottom: 18px;
+        }
+
+        button {
+            background: #2e8bff;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            transition: background .18s;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #166fd9;
         }
 
         h2 {
-            margin-bottom: 16px;
+            margin-bottom: 18px;
+            font-size: 20px;
+            color: #333;
+            line-height: 1.4;
+        }
+
+        @media (max-width: 480px) {
+            .form-box {
+                padding: 18px 6vw;
+                width: 100%;
+                max-width: 98vw;
+                border-radius: 7px;
+                box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            }
+
+            h2 {
+                font-size: 17px;
+            }
+
+            select,
+            button {
+                font-size: 15.5px;
+            }
         }
     </style>
 </head>
@@ -44,7 +94,6 @@
                 <option value="{{ emp.id }}">{{ emp.name }}</option>
                 {% endfor %}
             </select>
-            <br>
             <button type="submit">✅ 进入签名</button>
         </form>
     </div>
