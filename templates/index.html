@@ -410,6 +410,39 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
+
+        .sidebar-divider {
+            height: 1px;
+            background: linear-gradient(to right, #dde8fa 30%, #f5f7fa 100%);
+            margin: 26px 16px 10px 16px;
+            border-radius: 1px;
+        }
+
+        .sidebar-section-title {
+            font-size: 13px;
+            color: #aaa;
+            margin: 8px 22px 6px 28px;
+            letter-spacing: 1.5px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .vehicle-link {
+            color: #24a572 !important;
+            font-weight: bold;
+            background: #e9fcf2;
+            margin-top: 2px;
+            margin-bottom: 8px;
+            border-left: 4px solid #24a572;
+            border-radius: 0 18px 18px 0;
+            transition: 0.23s;
+        }
+
+        .vehicle-link:hover {
+            background: #ccf7e1;
+            color: #178c5c !important;
+            border-left: 4px solid #178c5c;
+        }
     </style>
 </head>
 
@@ -425,11 +458,15 @@
             <a href="#upload" onclick="navigateAndRemember('upload')">📥 上传文件</a>
             <a href="#records" onclick="navigateAndRemember('records')">📄 签名记录</a>
             <a href="#employees" onclick="navigateAndRemember('employees')">👥 员工管理</a>
-            <a href="http://smartplatex.yourdomain.com" target="_blank" style="color:#24a572;font-weight:bold;">
-                🚗 车牌识别系统
-            </a>
             <a href="/logout" style="color:#e74c3c;">🔑 退出登录</a>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-section-title">扩展系统</div>
+            <a href="https://smartplatex.hanchengzuo.com" target="_blank" class="vehicle-link">
+                🚗 车辆控制系统
+            </a>
         </div>
+
+
 
         <div class="content">
             <div id="upload-section">
