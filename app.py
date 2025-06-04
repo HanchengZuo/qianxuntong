@@ -752,9 +752,9 @@ def quiz_page(task_id, employee_id):
 
 
 # 本地调试
-# if __name__ == "__main__":
-#     app.run(debug=True)
-
-# 局域网调试
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(debug=True)
+
+# # 局域网调试
+# if __name__ == "__main__":
+#     app.run(host="0.0.0.0", port=5001, debug=True)
