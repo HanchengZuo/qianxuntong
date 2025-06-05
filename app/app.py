@@ -604,9 +604,10 @@ def delete_record(task_id):
 
         # 删除上传的 PDF 文件
         user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(current_user.id))
-        for fname in os.listdir(user_folder):
-            if fname.startswith(task_id):
-                os.remove(os.path.join(user_folder, fname))
+        if os.path.exists(user_folder):
+            for fname in os.listdir(user_folder):
+                if fname.startswith(task_id):
+                    os.remove(os.path.join(user_folder, fname))
 
         # 删除合成后的 PDF 文件
         final_user_folder = os.path.join(
@@ -615,8 +616,6 @@ def delete_record(task_id):
         final_path = os.path.join(final_user_folder, f"{task_id}_signed.pdf")
         if os.path.exists(final_path):
             os.remove(final_path)
-
-        # 不再处理 meta_path
 
         return jsonify({"status": "success"})
 
