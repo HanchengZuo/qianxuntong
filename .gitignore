@@ -1,17 +1,17 @@
 # 忽略 static 文件夹下所有文件和子文件夹的文件
-static/*
+app/static/*
 # 但不忽略 static 文件夹本身
-!static/.gitkeep
+!app/static/.gitkeep
 
 # 保留每个子文件夹，但忽略其内容
-static/final/
-static/meta/
-static/previews/
-static/uploads/
-!static/final/.gitkeep
-!static/meta/.gitkeep
-!static/previews/.gitkeep
-!static/uploads/.gitkeep
+app/static/final/
+app/static/meta/
+app/static/previews/
+app/static/uploads/
+!app/static/final/.gitkeep
+!app/static/meta/.gitkeep
+!app/static/previews/.gitkeep
+!app/static/uploads/.gitkeep
 
 
 # macOS

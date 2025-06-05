@@ -8,7 +8,7 @@ from flask import (
 )
 import os
 from werkzeug.utils import secure_filename
-
+from sqlalchemy import and_
 from utils.signer import insert_signatures_into_pdf
 import uuid
 import json
@@ -31,7 +31,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "very-secret-key-123456"
 app.config["UPLOAD_FOLDER"] = "static/uploads"
-app.config["META_FOLDER"] = "static/meta"
 app.config["FINAL_FOLDER"] = "static/final"
 app.config["SIGN_URL"] = "http://127.0.0.1:5000/sign/"
 
@@ -43,7 +42,6 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-os.makedirs(app.config["META_FOLDER"], exist_ok=True)
 os.makedirs(app.config["FINAL_FOLDER"], exist_ok=True)
 
 # 定义中国时区
@@ -51,6 +49,7 @@ CHINA_TZ = timezone("Asia/Shanghai")
 
 
 class SignatureTask(db.Model):
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     task_id = db.Column(db.String(64), unique=True, nullable=False)
@@ -68,6 +67,7 @@ class SignatureTask(db.Model):
 
 
 class SignatureStatus(db.Model):
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     task_id = db.Column(
@@ -80,14 +80,18 @@ class SignatureStatus(db.Model):
 
 
 class Employee(db.Model):
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "local_id"),
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
+    )
     id = db.Column(db.Integer, primary_key=True)  # 物理主键
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     local_id = db.Column(db.Integer, nullable=False)  # 用户空间自增逻辑id
     name = db.Column(db.String(50), nullable=False)
-    __table_args__ = (db.UniqueConstraint("user_id", "local_id"),)  # 保证唯一
 
 
 class QuizQuestion(db.Model):
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     task_id = db.Column(
@@ -104,9 +108,29 @@ class QuizQuestion(db.Model):
 
 
 class User(UserMixin, db.Model):
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
+
+
+# 签名区域表
+class SignatureBox(db.Model):
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(
+        db.String(64), db.ForeignKey("signature_task.task_id"), nullable=False
+    )
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False)
+    page = db.Column(db.Integer, nullable=False)
+    left = db.Column(db.Float, nullable=False)
+    top = db.Column(db.Float, nullable=False)
+    width = db.Column(db.Float, nullable=False)
+    height = db.Column(db.Float, nullable=False)
+    signed = db.Column(db.Boolean, default=False)
+    image = db.Column(db.Text)  # base64字符串，签名前可为空
+    preview_width = db.Column(db.Float)
+    preview_height = db.Column(db.Float)
 
 
 def parse_answers(answer_str):
@@ -302,14 +326,8 @@ def delete_employee(local_id):
 @login_required
 def preview(task_id):
 
-    meta_path = os.path.join(app.config["META_FOLDER"], f"{task_id}.json")
-    sign_ready = False
-
-    if os.path.exists(meta_path):
-        with open(meta_path, "r") as f:
-            boxes = json.load(f)
-            sign_ready = len(boxes) > 0
-
+    boxes = SignatureBox.query.filter_by(task_id=task_id).all()
+    sign_ready = len(boxes) > 0
     sign_link = app.config["SIGN_URL"] + task_id if sign_ready else None
 
     employees_raw = Employee.query.filter_by(user_id=current_user.id).all()
@@ -349,51 +367,32 @@ def preview(task_id):
 @app.route("/save_box/<task_id>", methods=["POST"])
 @login_required
 def save_box(task_id):
-    # ✅ 读取提交的 box 数据
-    box_data = request.get_json()
+    box_data = request.get_json()  # 这是前端传来的所有box列表
 
-    # ✅ 保存到 meta 文件
-    meta_path = os.path.join(app.config["META_FOLDER"], f"{task_id}.json")
-    with open(meta_path, "w") as f:
-        json.dump(box_data, f)
+    # 先删除本任务下的所有老的box（防止反复保存产生重复/脏数据）
+    SignatureBox.query.filter_by(task_id=task_id).delete()
+    db.session.commit()
 
-    # ✅ 检查任务是否存在
-    task = SignatureTask.query.filter_by(
-        user_id=current_user.id, task_id=task_id
-    ).first()
-    if not task:
-        return jsonify({"status": "error", "msg": "任务不存在，请重新上传文件"}), 400
-
-    selected_ids = task.get_employee_ids()
-    selected_ids = [int(i) for i in selected_ids]
-
-    # ✅ 查询已存在的签名状态
-    existing_statuses = SignatureStatus.query.filter_by(
-        user_id=current_user.id, task_id=task_id
-    ).all()
-    existing_employee_ids = {s.employee_id for s in existing_statuses}
-
-    # ✅ 建立新的签名状态（避免重复创建）
-    new_statuses = []
+    # 批量插入每个box
     for box in box_data:
         try:
-            employee_id = int(box["employee_id"])
-        except (KeyError, ValueError):
-            continue  # 跳过非法或缺失的记录
-
-        if employee_id not in existing_employee_ids and employee_id in selected_ids:
-            new_statuses.append(
-                SignatureStatus(
-                    user_id=current_user.id,
-                    task_id=task_id,
-                    employee_id=employee_id,
-                    signed=False,
-                )
+            new_box = SignatureBox(
+                task_id=task_id,
+                employee_id=int(box["employee_id"]),
+                page=int(box["page"]),
+                left=float(box["left"]),
+                top=float(box["top"]),
+                width=float(box["width"]),
+                height=float(box["height"]),
+                signed=bool(box.get("signed", False)),
+                image=box.get("image"),  # 刚配置时一般为 None
+                preview_width=float(box.get("preview_width", 0)),
+                preview_height=float(box.get("preview_height", 0)),
             )
-
-    if new_statuses:
-        db.session.add_all(new_statuses)
-        db.session.commit()
+            db.session.add(new_box)
+        except Exception as e:
+            print("❌ 保存 box 时出错", box, e)
+    db.session.commit()
 
     return jsonify({"status": "success"})
 
@@ -401,18 +400,29 @@ def save_box(task_id):
 @app.route("/sign/<task_id>")
 @login_required
 def sign_page(task_id):
-    meta_path = os.path.join(app.config["META_FOLDER"], f"{task_id}.json")
-    if not os.path.exists(meta_path):
+    boxes = SignatureBox.query.filter_by(task_id=task_id).all()
+    if not boxes:
         return "签名区域未配置"
 
-    with open(meta_path, "r") as f:
-        boxes = json.load(f)
+    # 如果模板用 dict，可以转一下；如果模板直接用对象列表也可以
+    box_list = [
+        {
+            "id": box.id,
+            "employee_id": box.employee_id,
+            "page": int(box.page),
+            "left": float(box.left),
+            "top": float(box.top),
+            "width": float(box.width),
+            "height": float(box.height),
+            "signed": bool(box.signed),
+            "image": box.image,
+            "preview_width": float(box.preview_width) if box.preview_width else None,
+            "preview_height": float(box.preview_height) if box.preview_height else None,
+        }
+        for box in boxes
+    ]
 
-    # ✅ 关键修复：确保 page 是 int，避免模板中匹配失败
-    for box in boxes:
-        box["page"] = int(box["page"])
-
-    return render_template("sign.html", task_id=task_id, boxes=boxes)
+    return render_template("sign.html", task_id=task_id, boxes=box_list)
 
 
 @app.route("/submit_sign/<task_id>", methods=["POST"])
@@ -426,46 +436,36 @@ def submit_sign(task_id):
 
     data = request.get_json()
     print(f"👉 [SIGN] task_id={task_id} data={data}")
-    meta_path = os.path.join(app.config["META_FOLDER"], f"{task_id}.json")
-    if not os.path.exists(meta_path):
-        return jsonify({"status": "error", "msg": "签名区域未配置"})
 
-    with open(meta_path, "r") as f:
-        boxes = json.load(f)
+    if not data or not isinstance(data, list):
+        return jsonify({"status": "error", "msg": "缺少签名数据"})
 
-    employee_id = str(data[0].get("employee_id"))
+    employee_id = data[0].get("employee_id")
     if not employee_id:
         return jsonify({"status": "error", "msg": "缺少签名人信息"})
 
     updated = False
     for item in data:
-        item_left = float(item["left"])
-        item_top = float(item["top"])
-        item_page = int(item["page"])
-
-        for box in boxes:
-            if (
-                int(box["page"]) == item_page
-                and abs(float(box["left"]) - item_left) < 1e-1
-                and abs(float(box["top"]) - item_top) < 1e-1
-                and str(box.get("employee_id")) == employee_id
-            ):
-                if not box.get("signed"):  # ✅ 避免重复覆盖
-                    box["signed"] = True
-                    box["image"] = item["image"]
-                    box["preview_width"] = item["preview_width"]
-                    box["preview_height"] = item["preview_height"]
-                    updated = True
-                break
+        box = SignatureBox.query.filter(
+            SignatureBox.task_id == task_id,
+            SignatureBox.employee_id == int(item["employee_id"]),
+            SignatureBox.page == int(item["page"]),
+            db.func.abs(SignatureBox.left - float(item["left"])) < 0.01,
+            db.func.abs(SignatureBox.top - float(item["top"])) < 0.01,
+        ).first()
+        if box and not box.signed:
+            box.signed = True
+            box.image = item.get("image")
+            box.preview_width = item.get("preview_width")
+            box.preview_height = item.get("preview_height")
+            updated = True
 
     if not updated:
         return jsonify({"status": "error", "msg": "未匹配到对应签名区域，或已签名"})
 
-    # ✅ 保存签名图到 meta 文件
-    with open(meta_path, "w") as f:
-        json.dump(boxes, f)
+    db.session.commit()
 
-    # ✅ 更新数据库中的签名状态
+    # 更新数据库中的签名状态
     sig_status = SignatureStatus.query.filter_by(
         user_id=current_user.id, task_id=task_id, employee_id=int(employee_id)
     ).first()
@@ -473,7 +473,7 @@ def submit_sign(task_id):
         sig_status.signed = True
         db.session.commit()
 
-    # ✅ 检查是否所有人都签完，才触发合成 PDF
+    # 检查是否所有人都签完，才触发合成 PDF
     all_statuses = SignatureStatus.query.filter_by(
         user_id=current_user.id, task_id=task_id
     ).all()
@@ -496,25 +496,36 @@ def submit_sign(task_id):
             app.config["FINAL_FOLDER"], f"{task_id}_signed.pdf"
         )
 
-        # ✅ 构建签名图列表（已签名的）
-        signature_images = [
-            {
-                "page": int(box["page"]),
-                "left": float(box["left"]),
-                "top": float(box["top"]),
-                "width": float(box["width"]),
-                "height": float(box["height"]),
-                "image_bytes": base64.b64decode(box["image"].split(",")[1]),
-                "preview_width": float(box.get("preview_width", 1240)),
-                "preview_height": float(box.get("preview_height", 1754)),
-            }
-            for box in boxes
-            if box.get("signed") and box.get("image")
-        ]
+        # 构建签名图列表（已签名的）
+        signature_boxes = SignatureBox.query.filter_by(
+            task_id=task_id, signed=True
+        ).all()
+        signature_images = []
+        for box in signature_boxes:
+            if box.image:
+                image_base64 = (
+                    box.image.split(",")[1] if "," in box.image else box.image
+                )
+                signature_images.append(
+                    {
+                        "page": int(box.page),
+                        "left": float(box.left),
+                        "top": float(box.top),
+                        "width": float(box.width),
+                        "height": float(box.height),
+                        "image_bytes": base64.b64decode(image_base64),
+                        "preview_width": (
+                            float(box.preview_width) if box.preview_width else 1240
+                        ),
+                        "preview_height": (
+                            float(box.preview_height) if box.preview_height else 1754
+                        ),
+                    }
+                )
 
         insert_signatures_into_pdf(full_pdf_path, output_pdf_path, signature_images)
 
-        # ✅ 标记任务完成
+        # 标记任务完成
         task.is_completed = True
         db.session.commit()
 
@@ -532,24 +543,23 @@ def sign_submitted(task_id):
 @app.route("/invite/<task_id>")
 @login_required
 def invite_page(task_id):
-    meta_path = os.path.join(app.config["META_FOLDER"], f"{task_id}.json")
-    if not os.path.exists(meta_path):
+    # 查找该任务下所有签名区域（SignatureBox）
+    boxes = SignatureBox.query.filter_by(task_id=task_id).all()
+    if not boxes:
         return "签名区域未配置"
 
-    with open(meta_path, "r") as f:
-        boxes = json.load(f)
+    # 提取所有涉及到的员工ID
+    employee_ids = list({box.employee_id for box in boxes})
 
-    employee_ids = list({int(b["employee_id"]) for b in boxes})
+    # 获取这些员工的信息
     employees = (
         Employee.query.filter_by(user_id=current_user.id)
         .filter(Employee.local_id.in_(employee_ids))
         .all()
     )
 
-    signed_ids = set()
-    for box in boxes:
-        if box.get("signed"):
-            signed_ids.add(int(box["employee_id"]))
+    # 已签名的员工ID集合
+    signed_ids = {box.employee_id for box in boxes if box.signed}
 
     base_url = request.url_root.rstrip("/")
 
@@ -580,6 +590,12 @@ def delete_record(task_id):
             user_id=current_user.id, task_id=task_id
         ).delete()
 
+        # 删除所有签名区域
+        SignatureBox.query.filter_by(task_id=task_id).delete()
+
+        # 删除题库
+        QuizQuestion.query.filter_by(user_id=current_user.id, task_id=task_id).delete()
+
         # 删除任务本身
         db.session.delete(task)
         db.session.commit()
@@ -594,10 +610,7 @@ def delete_record(task_id):
         if os.path.exists(final_path):
             os.remove(final_path)
 
-        # 删除签名区域配置 JSON
-        meta_path = os.path.join(app.config["META_FOLDER"], f"{task_id}.json")
-        if os.path.exists(meta_path):
-            os.remove(meta_path)
+        # 不再处理 meta_path
 
         return jsonify({"status": "success"})
 
@@ -619,18 +632,12 @@ def sign_select(task_id):
             url_for("sign_page_employee", task_id=task_id, employee_id=employee_id)
         )
 
-    # 获取当前任务中涉及的员工
-    meta_path = os.path.join(app.config["META_FOLDER"], f"{task_id}.json")
-    if not os.path.exists(meta_path):
-        return "签名区域未配置"
-
-    with open(meta_path, "r") as f:
-        boxes = json.load(f)
-
-    employee_ids = set(b["employee_id"] for b in boxes)
+    # 获取当前任务所有涉及到的员工ID（查 SignatureBox）
+    box_emps = SignatureBox.query.filter_by(task_id=task_id).all()
+    employee_ids = set(b.employee_id for b in box_emps)
     employees = (
         Employee.query.filter_by(user_id=current_user.id)
-        .filter(Employee.local_id.in_(employee_ids))
+        .filter(Employee.id.in_(employee_ids))
         .all()
     )
 
@@ -657,19 +664,30 @@ def sign_page_employee(task_id, employee_id):
     # ✅ 获取 quiz 状态，前端判断是否允许签名，不再强制跳 quiz
     quiz_passed = status.quiz_passed if status else False
 
-    # ✅ 加载签名区域
-    meta_path = os.path.join(app.config["META_FOLDER"], f"{task_id}.json")
-    if not os.path.exists(meta_path):
-        return "签名区域未配置"
-
-    with open(meta_path, "r") as f:
-        all_boxes = json.load(f)
-
-    filtered_boxes = [
-        box for box in all_boxes if int(box["employee_id"]) == employee_id
-    ]
-    for box in filtered_boxes:
-        box["page"] = int(box["page"])
+    # ✅ 直接查 SignatureBox 表，获取当前员工所有签名区域
+    boxes_raw = SignatureBox.query.filter_by(
+        task_id=task_id, employee_id=employee_id
+    ).all()
+    filtered_boxes = []
+    for box in boxes_raw:
+        filtered_boxes.append(
+            {
+                "page": int(box.page),
+                "left": float(box.left),
+                "top": float(box.top),
+                "width": float(box.width),
+                "height": float(box.height),
+                "signed": box.signed,
+                "image": box.image,
+                "preview_width": (
+                    float(box.preview_width) if box.preview_width else None
+                ),
+                "preview_height": (
+                    float(box.preview_height) if box.preview_height else None
+                ),
+                "employee_id": box.employee_id,
+            }
+        )
 
     # ✅ 获取上传的 PDF 文件名并 URL 编码
     uploaded_filename = next(
