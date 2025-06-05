@@ -203,7 +203,9 @@ def index():
 
         filename = secure_filename(pdf_file.filename)
         task_id = str(uuid.uuid4())
-        save_path = os.path.join(app.config["UPLOAD_FOLDER"], f"{task_id}_{filename}")
+        user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(current_user.id))
+        os.makedirs(user_folder, exist_ok=True)
+        save_path = os.path.join(user_folder, f"{task_id}_{filename}")
         pdf_file.save(save_path)
 
         # ✅ 创建签名任务记录
@@ -343,8 +345,9 @@ def preview(task_id):
         user_id=current_user.id, task_id=task_id
     ).first()
 
+    user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(current_user.id))
     uploaded_filename = next(
-        (f for f in os.listdir(app.config["UPLOAD_FOLDER"]) if f.startswith(task_id)),
+        (f for f in os.listdir(user_folder) if f.startswith(task_id)),
         None,
     )
 
@@ -480,21 +483,20 @@ def submit_sign(task_id):
     if all(s.signed for s in all_statuses):
         print("📄 所有签名区域已签名，开始合成 PDF")
 
+        user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(current_user.id))
         pdf_path = next(
-            (
-                f
-                for f in os.listdir(app.config["UPLOAD_FOLDER"])
-                if f.startswith(task_id)
-            ),
+            (f for f in os.listdir(user_folder) if f.startswith(task_id)),
             None,
         )
         if not pdf_path:
             return jsonify({"status": "error", "msg": "PDF 未找到"})
 
-        full_pdf_path = os.path.join(app.config["UPLOAD_FOLDER"], pdf_path)
-        output_pdf_path = os.path.join(
-            app.config["FINAL_FOLDER"], f"{task_id}_signed.pdf"
+        full_pdf_path = os.path.join(user_folder, pdf_path)
+        final_user_folder = os.path.join(
+            app.config["FINAL_FOLDER"], str(current_user.id)
         )
+        os.makedirs(final_user_folder, exist_ok=True)
+        output_pdf_path = os.path.join(final_user_folder, f"{task_id}_signed.pdf")
 
         # 构建签名图列表（已签名的）
         signature_boxes = SignatureBox.query.filter_by(
@@ -601,12 +603,16 @@ def delete_record(task_id):
         db.session.commit()
 
         # 删除上传的 PDF 文件
-        for fname in os.listdir(app.config["UPLOAD_FOLDER"]):
+        user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(current_user.id))
+        for fname in os.listdir(user_folder):
             if fname.startswith(task_id):
-                os.remove(os.path.join(app.config["UPLOAD_FOLDER"], fname))
+                os.remove(os.path.join(user_folder, fname))
 
         # 删除合成后的 PDF 文件
-        final_path = os.path.join(app.config["FINAL_FOLDER"], f"{task_id}_signed.pdf")
+        final_user_folder = os.path.join(
+            app.config["FINAL_FOLDER"], str(current_user.id)
+        )
+        final_path = os.path.join(final_user_folder, f"{task_id}_signed.pdf")
         if os.path.exists(final_path):
             os.remove(final_path)
 
@@ -690,8 +696,9 @@ def sign_page_employee(task_id, employee_id):
         )
 
     # ✅ 获取上传的 PDF 文件名并 URL 编码
+    user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(current_user.id))
     uploaded_filename = next(
-        (f for f in os.listdir(app.config["UPLOAD_FOLDER"]) if f.startswith(task_id)),
+        (f for f in os.listdir(user_folder) if f.startswith(task_id)),
         None,
     )
     if not uploaded_filename:

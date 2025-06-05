@@ -123,7 +123,7 @@
         // ✅ 当前任务中被选中的员工对象列表
         const selectedEmployees = employees.filter(e => selectedEmployeeIds.includes(e.local_id.toString()));
 
-        const pdfUrl = "/static/uploads/{{ encoded_title }}";
+        const pdfUrl = "/static/uploads/{{ current_user.id }}/{{ encoded_title }}";
 
         const pdfjsLib = window['pdfjs-dist/build/pdf'];
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';

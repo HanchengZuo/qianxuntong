@@ -550,7 +550,8 @@
                             <td>
                                 <a class="btn-view" href="/invite/{{ task.task_id }}" target="_blank">🔍 查看</a>
                                 {% if task.is_completed %}
-                                <a class="btn-download" href="/static/final/{{ task.task_id }}_signed.pdf" download>📄
+                                <a class="btn-download"
+                                    href="/static/final/{{ current_user.id }}/{{ task.task_id }}_signed.pdf" download>📄
                                     下载</a>
                                 {% endif %}
                                 <button class="btn-delete" onclick="deleteTask('{{ task.task_id }}', this, event)">🗑

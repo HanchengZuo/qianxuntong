@@ -249,7 +249,7 @@
         const employeeId = "{{ employee_id }}";
         const employeeName = "{{ employee_name }}";
         const boxes = {{ boxes | tojson }};
-        const pdfUrl = "/static/uploads/{{ encoded_title }}";
+        const pdfUrl = "/static/uploads/{{ current_user.id }}/{{ encoded_title }}";
         const signatureKey = `signature_image_${taskId}_${employeeId}`;
         const signatureImg = localStorage.getItem(signatureKey);
 
