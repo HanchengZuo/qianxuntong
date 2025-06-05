@@ -1,0 +1,36 @@
+version: "3.8"
+services:
+  db:
+    image: mysql:5.7
+    platform: linux/amd64
+    container_name: qxt-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: qxt123456
+      MYSQL_DATABASE: qianxuntong
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: always
+
+  web:
+    build: ./app
+    container_name: qxt-web
+    command: python app.py
+    environment:
+      - FLASK_ENV=development
+      - TZ=Asia/Shanghai
+      - DATABASE_URL=mysql+pymysql://root:qxt123456@db:3306/qianxuntong
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./app:/app
+      - ./app/static:/app/static
+      - ./app/templates:/app/templates
+    depends_on:
+      - db
+    restart: always
+
+volumes:
+  mysql_data:

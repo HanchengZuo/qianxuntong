@@ -35,13 +35,16 @@ app.config["META_FOLDER"] = "static/meta"
 app.config["FINAL_FOLDER"] = "static/final"
 app.config["SIGN_URL"] = "http://127.0.0.1:5000/sign/"
 
+# 让 Flask 支持通过环境变量读取数据库连接
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
+    "DATABASE_URL", "mysql+pymysql://root:qxt123456@db:3306/qianxuntong?charset=utf8mb4"
+)
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+db = SQLAlchemy(app)
+
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 os.makedirs(app.config["META_FOLDER"], exist_ok=True)
 os.makedirs(app.config["FINAL_FOLDER"], exist_ok=True)
-
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///qianxuntong.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-db = SQLAlchemy(app)
 
 # 定义中国时区
 CHINA_TZ = timezone("Asia/Shanghai")
@@ -103,7 +106,7 @@ class QuizQuestion(db.Model):
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
 
 
 def parse_answers(answer_str):
@@ -763,10 +766,7 @@ def quiz_page(task_id, employee_id):
     )
 
 
-# 本地调试
 if __name__ == "__main__":
-    app.run(debug=True)
-
-# # 局域网调试
-# if __name__ == "__main__":
-#     app.run(host="0.0.0.0", port=5001, debug=True)
+    with app.app_context():
+        db.create_all()  # 首次启动创建所有表
+    app.run(host="0.0.0.0", port=5050, debug=True)
