@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>无法作答</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1">
+    <style>
+        body {
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            background: #f7f9fc;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 420px;
+            margin: 72px auto 0 auto;
+            background: #fff;
+            border-radius: 18px;
+            padding: 40px 28px 34px 28px;
+            text-align: center;
+            box-shadow: 0 8px 36px rgba(44, 150, 220, 0.09), 0 1.5px 7px #0001;
+        }
+
+        .icon-warning {
+            font-size: 52px;
+            color: #e26b37;
+            margin-bottom: 14px;
+            display: block;
+        }
+
+        .msg {
+            font-size: 21px;
+            font-weight: 500;
+            margin-bottom: 18px;
+            color: #d03528;
+            letter-spacing: 0.5px;
+        }
+
+        .info {
+            font-size: 17px;
+            color: #4e5969;
+            background: #f2f4f8;
+            border-radius: 8px;
+            margin: 0 auto 12px auto;
+            padding: 15px 8px 13px 8px;
+            width: 90%;
+            line-height: 1.9;
+            box-sizing: border-box;
+        }
+
+        .back-btn {
+            margin-top: 14px;
+            padding: 9px 36px;
+            font-size: 16px;
+            background: #2e8bff;
+            color: #fff;
+            border: none;
+            border-radius: 22px;
+            cursor: pointer;
+            box-shadow: 0 2px 10px #2e8bff22;
+            transition: background 0.18s;
+        }
+
+        .back-btn:hover {
+            background: #166fd9;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                margin: 30px 5vw 0 5vw;
+                padding: 28px 10px 18px 10px;
+            }
+
+            .info {
+                width: 98%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <span class="icon-warning">🚫</span>
+        <div class="msg">{{ msg }}</div>
+        {% if score is defined %}
+        <div class="info">
+            <div>答题得分：<b style="color:#2e8b57;">{{ score }}</b></div>
+            <div>共尝试：<b>{{ attempts }}</b> 次</div>
+            <div>通过：<b style="color:{{ 'green' if is_passed else '#e26b37' }};">{{ "是" if is_passed else "否" }}</b>
+            </div>
+        </div>
+        {% endif %}
+        <button class="back-btn" onclick="window.location.href='/'">返回首页</button>
+    </div>
+</body>
+
+</html>

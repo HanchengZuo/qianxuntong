@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}签训通{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    {% block head_extra %}{% endblock %}
+</head>
+
+<body>
+    <div class="header">
+        📝 签训通 - 智能签名培训答题系统
+        <span style="float:right;font-size:17px;">👤 {{ current_user.username }}</span>
+    </div>
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-section-title">签名答题系统</div>
+            <a href="{{ url_for('upload') }}">📥 签名发布</a>
+            <a href="{{ url_for('records') }}">📄 签名记录</a>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-section-title">培训答题系统</div>
+            <a href="{{ url_for('training_task') }}">🚀 培训发布</a>
+            <a href="{{ url_for('training_materials') }}">📚 培训材料</a>
+            <a href="{{ url_for('question_bank') }}">🧠 培训题库</a>
+            <a href="{{ url_for('training_stats') }}">📊 培训记录</a>
+            <div class="sidebar-divider"></div>
+            <a href="{{ url_for('employees') }}">👥 员工管理</a>
+            <a href="/logout" style="color:#e74c3c;">🔑 退出登录</a>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-section-title">扩展系统</div>
+            <a href="https://smartplatex.hanchengzuo.com" target="_blank" class="vehicle-link">
+                🚗 车牌识别
+            </a>
+        </div>
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

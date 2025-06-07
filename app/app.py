@@ -133,6 +133,69 @@ class SignatureBox(db.Model):
     preview_height = db.Column(db.Float)
 
 
+class TrainingMaterial(db.Model):
+    __tablename__ = "training_material"
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text)
+    file_path = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class TrainingQuestion(db.Model):
+    __tablename__ = "training_question"
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    material_id = db.Column(
+        db.Integer, db.ForeignKey("training_material.id"), nullable=False
+    )
+    content = db.Column(db.Text, nullable=False)
+    options = db.Column(db.Text, nullable=False)  # JSON: ["A", "B", ...]
+    correct_answers = db.Column(db.Text, nullable=False)  # JSON: [0,2]
+    multiple = db.Column(db.Boolean, default=False)
+
+
+class TrainingTask(db.Model):
+    __tablename__ = "training_task"
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200))
+    material_id = db.Column(db.Integer, db.ForeignKey("training_material.id"))
+    description = db.Column(db.Text)
+    deadline = db.Column(db.Date)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    max_attempts = db.Column(db.Integer, default=1)  # 最大答题次数
+    pass_score_ratio = db.Column(db.Float, default=0.8)  # 通过所需正确率（如0.8=80%）
+
+
+class TrainingTaskEmployee(db.Model):
+    __tablename__ = "training_task_employee"
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("training_task.id"))
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"))
+    status = db.Column(db.String(10), default="未完成")
+    score = db.Column(db.Float)
+    submit_time = db.Column(db.DateTime)
+    attempts = db.Column(db.Integer, default=0)  # 已答题次数
+    is_passed = db.Column(db.Boolean, default=False)  # 是否已通过
+
+
+class TrainingAnswerHistory(db.Model):
+    __tablename__ = "training_answer_history"
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("training_task.id"))
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"))
+    attempt_num = db.Column(db.Integer)  # 第几次答题
+    score = db.Column(db.Float)
+    is_passed = db.Column(db.Boolean)
+    submit_time = db.Column(db.DateTime, default=datetime.now)
+
+
 def parse_answers(answer_str):
     mapping = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4, "F": 5}
     answer_str = answer_str.upper().replace(" ", "")
@@ -292,7 +355,14 @@ def index():
         .order_by(Employee.local_id.desc())
         .all()
     )
-    return render_template("index.html", tasks=task_info, employees=employees)
+    materials = (
+        TrainingMaterial.query.filter_by(user_id=current_user.id)
+        .order_by(TrainingMaterial.created_at.desc())
+        .all()
+    )
+    return render_template(
+        "index.html", tasks=task_info, employees=employees, materials=materials
+    )
 
 
 @app.route("/employee/new", methods=["POST"])
@@ -787,6 +857,532 @@ def quiz_page(task_id, employee_id):
         task_id=task_id,
         employee_id=employee_id,
         questions=parsed_questions,
+    )
+
+
+@app.route("/training_materials", methods=["POST"])
+@login_required
+def training_materials():
+    user_folder = os.path.join("static/training_materials", str(current_user.id))
+    os.makedirs(user_folder, exist_ok=True)
+    title = request.form.get("title")
+    desc = request.form.get("description", "")
+    file = request.files.get("file")
+    if not (title and file and file.filename.endswith(".pdf")):
+        return jsonify({"status": "fail", "msg": "请上传PDF文件并填写标题"}), 200
+    filename = secure_filename(file.filename)
+    save_path = os.path.join(user_folder, filename)
+    file.save(save_path)
+    mat = TrainingMaterial(
+        user_id=current_user.id,
+        title=title,
+        description=desc,
+        file_path=os.path.join(str(current_user.id), filename),
+    )
+    db.session.add(mat)
+    db.session.commit()
+    return jsonify(
+        {
+            "status": "success",
+            "mat": {
+                "id": mat.id,
+                "title": mat.title,
+                "description": mat.description or "",
+                "file_path": mat.file_path,
+                "created_at": mat.created_at.strftime("%Y-%m-%d %H:%M"),
+            },
+        }
+    )
+
+
+@app.route("/training_materials/list")
+@login_required
+def training_materials_list():
+    mats = (
+        TrainingMaterial.query.filter_by(user_id=current_user.id)
+        .order_by(TrainingMaterial.created_at.desc())
+        .all()
+    )
+
+    def mat2dict(m):
+        return {
+            "id": m.id,
+            "title": m.title,
+            "description": m.description or "",
+            "created_at": m.created_at.strftime("%Y-%m-%d %H:%M"),
+            "file_path": m.file_path,
+        }
+
+    return jsonify({"mats": [mat2dict(m) for m in mats]})
+
+
+@app.route("/training_materials/delete/<int:mat_id>", methods=["POST"])
+@login_required
+def delete_material(mat_id):
+    mat = TrainingMaterial.query.filter_by(id=mat_id, user_id=current_user.id).first()
+    if mat:
+        abs_path = os.path.join("static/training_materials", mat.file_path)
+        if os.path.exists(abs_path):
+            os.remove(abs_path)
+        db.session.delete(mat)
+        db.session.commit()
+        return jsonify({"status": "success"})
+    return jsonify({"status": "not_found"}), 404
+
+
+@app.route("/training_questions/list")
+@login_required
+def training_questions_list():
+    material_id = request.args.get("material_id", type=int)
+    questions = (
+        TrainingQuestion.query.filter_by(
+            user_id=current_user.id, material_id=material_id
+        )
+        .order_by(TrainingQuestion.id.desc())
+        .all()
+    )
+
+    def q2dict(q):
+        return {
+            "id": q.id,
+            "content": q.content,
+            "options": json.loads(q.options),
+            "correct_answers": json.loads(q.correct_answers),
+            "multiple": q.multiple,
+        }
+
+    return jsonify({"questions": [q2dict(q) for q in questions]})
+
+
+@app.route("/training_questions/new", methods=["POST"])
+@login_required
+def training_question_new():
+    data = request.get_json()
+    q = TrainingQuestion(
+        user_id=current_user.id,
+        material_id=data["material_id"],
+        content=data["content"],
+        options=json.dumps(data["options"]),
+        correct_answers=json.dumps(data["correct_answers"]),
+        multiple=data["multiple"],
+    )
+    db.session.add(q)
+    db.session.commit()
+    return jsonify({"status": "success"})
+
+
+@app.route("/training_questions/get/<int:qid>")
+@login_required
+def training_question_get(qid):
+    q = TrainingQuestion.query.filter_by(id=qid, user_id=current_user.id).first()
+    if not q:
+        return jsonify({"status": "not_found"})
+    return jsonify(
+        {
+            "status": "success",
+            "q": {
+                "id": q.id,
+                "content": q.content,
+                "options": json.loads(q.options),
+                "correct_answers": json.loads(q.correct_answers),
+                "multiple": q.multiple,
+            },
+        }
+    )
+
+
+@app.route("/training_questions/edit/<int:qid>", methods=["POST"])
+@login_required
+def training_question_edit(qid):
+    q = TrainingQuestion.query.filter_by(id=qid, user_id=current_user.id).first()
+    if not q:
+        return jsonify({"status": "not_found"})
+    data = request.get_json()
+    q.content = data["content"]
+    q.options = json.dumps(data["options"])
+    q.correct_answers = json.dumps(data["correct_answers"])
+    q.multiple = data["multiple"]
+    db.session.commit()
+    return jsonify({"status": "success"})
+
+
+@app.route("/training_questions/delete/<int:qid>", methods=["POST"])
+@login_required
+def training_question_delete(qid):
+    q = TrainingQuestion.query.filter_by(id=qid, user_id=current_user.id).first()
+    if not q:
+        return jsonify({"status": "not_found"})
+    db.session.delete(q)
+    db.session.commit()
+    return jsonify({"status": "success"})
+
+
+# 新建培训任务
+@app.route("/training_task/new", methods=["POST"])
+@login_required
+def create_training_task():
+    title = request.form.get("title")
+    material_id = request.form.get("material_id")
+    description = request.form.get("description", "")
+    deadline = request.form.get("deadline")
+    employee_ids = request.form.getlist("employee_ids")
+    max_attempts = int(request.form.get("max_attempts", 1))
+    pass_score_ratio = float(request.form.get("pass_score_ratio", 80)) / 100.0
+
+    if not (title and material_id and employee_ids):
+        return "缺少必要参数", 400
+
+    # 1. 创建 TrainingTask
+    task = TrainingTask(
+        title=title,
+        material_id=material_id,
+        description=description,
+        deadline=deadline if deadline else None,
+        created_at=datetime.now(),
+        max_attempts=max_attempts,
+        pass_score_ratio=pass_score_ratio,
+    )
+    db.session.add(task)
+    db.session.commit()
+
+    # 2. 为每个员工生成 TrainingTaskEmployee 记录
+    for emp_id in employee_ids:
+        rec = TrainingTaskEmployee(task_id=task.id, employee_id=emp_id, status="未完成")
+        db.session.add(rec)
+    db.session.commit()
+    return redirect(url_for("training_task_invite", task_id=task.id))
+
+
+@app.route("/training_task/<int:task_id>")
+@login_required
+def training_task_detail(task_id):
+    task = TrainingTask.query.filter_by(id=task_id).first()
+    if not task:
+        return "未找到该培训任务", 404
+
+    # 查询培训材料
+    material = TrainingMaterial.query.filter_by(id=task.material_id).first()
+
+    # 查询参与员工及完成情况
+    employees = (
+        db.session.query(Employee, TrainingTaskEmployee)
+        .join(TrainingTaskEmployee, Employee.id == TrainingTaskEmployee.employee_id)
+        .filter(TrainingTaskEmployee.task_id == task_id)
+        .all()
+    )
+    emp_list = [{"name": emp.name, "status": tte.status} for emp, tte in employees]
+
+    # 生成培训答题链接（假设员工访问 /training_answer/<task_id> 开始答题）
+    base_url = request.url_root.rstrip("/")
+    answer_url = f"{base_url}/training_answer/{task_id}"
+
+    return render_template(
+        "training_task_invite.html",
+        task=task,
+        material=material,
+        employees=emp_list,
+        answer_url=answer_url,
+    )
+
+
+@app.route("/training_task/invite/<int:task_id>")
+@login_required
+def training_task_invite(task_id):
+    task = TrainingTask.query.get(task_id)
+    material = TrainingMaterial.query.get(task.material_id)
+    records = TrainingTaskEmployee.query.filter_by(task_id=task_id).all()
+    emp_ids = [rec.employee_id for rec in records]
+    employees = Employee.query.filter(Employee.id.in_(emp_ids)).all()
+    # 查询每人历史
+    histories = {}
+    for emp in employees:
+        hists = (
+            TrainingAnswerHistory.query.filter_by(task_id=task.id, employee_id=emp.id)
+            .order_by(TrainingAnswerHistory.attempt_num.asc())
+            .all()
+        )
+        histories[emp.id] = [
+            {
+                "score": h.score,
+                "is_passed": h.is_passed,
+                "submit_time": h.submit_time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            for h in hists
+        ]
+
+    emp_list = []
+    for emp in employees:
+        status = next(
+            (rec.status for rec in records if rec.employee_id == emp.id), "未完成"
+        )
+        emp_list.append({"id": emp.id, "name": emp.name, "status": status})
+
+    base_url = request.url_root.rstrip("/")
+    return render_template(
+        "training_task_invite.html",
+        task=task,
+        material=material,
+        base_url=base_url,
+        employees=emp_list,
+        histories=histories,
+    )
+
+
+@app.route("/training_answer/<int:task_id>/<int:employee_id>", methods=["GET", "POST"])
+def training_answer(task_id, employee_id):
+    tte = TrainingTaskEmployee.query.filter_by(
+        task_id=task_id, employee_id=employee_id
+    ).first()
+    task = TrainingTask.query.get(task_id)
+    material = TrainingMaterial.query.get(task.material_id)
+    employee = Employee.query.get(employee_id)
+    questions = TrainingQuestion.query.filter_by(material_id=material.id).all()
+    parsed_questions = [
+        {
+            "id": q.id,
+            "content": q.content,
+            "options": json.loads(q.options),
+            "correct_answers": json.loads(q.correct_answers),
+        }
+        for q in questions
+    ]
+    # 1. 判断整个任务是否已截止（只按截止日期）
+    if task.deadline and datetime.now().date() > task.deadline:
+        return render_template(
+            "training_answer_disabled.html", msg="本次培训任务已截止，无法再答题。"
+        )
+
+    # 2. 判断当前员工是否已完成
+    if tte.status == "已完成":
+        # 渲染成绩页面（可传成绩等信息）
+        return render_template(
+            "training_answer_disabled.html",
+            msg="你已完成本次答题，无需重复提交。",
+            score=tte.score,
+            is_passed=tte.is_passed,
+            attempts=tte.attempts,
+        )
+
+    if request.method == "POST":
+        # 已通过，无需再提交
+        if getattr(tte, "is_passed", False):
+            return jsonify(
+                {
+                    "success": False,
+                    "msg": "已通过，无需重复答题",
+                    "passed": True,
+                    "attempts": tte.attempts,
+                    "max_attempts": task.max_attempts,
+                }
+            )
+        # 已用完次数，不允许再提交
+        if getattr(tte, "attempts", 0) >= task.max_attempts:
+            # 也要将状态置为已完成
+            tte.status = "已完成"
+            db.session.commit()
+            return jsonify(
+                {
+                    "success": False,
+                    "msg": "已用完最大答题次数，无法再提交",
+                    "passed": False,
+                    "attempts": tte.attempts,
+                    "max_attempts": task.max_attempts,
+                }
+            )
+
+        # 允许本次提交
+        answers = request.get_json()
+        score = 0
+        for q in parsed_questions:
+            qid = f"q{q['id']}"
+            ans = int(answers.get(qid, -1))
+            if ans in q["correct_answers"]:
+                score += 1
+
+        tte.attempts = (tte.attempts or 0) + 1  # 计数+1
+        total = len(parsed_questions)
+        correct_ratio = score / total if total else 0
+        pass_score = getattr(task, "pass_score_ratio", 0.8)
+        passed = correct_ratio >= pass_score
+
+        # 1. 保存本次答题历史
+        history = TrainingAnswerHistory(
+            task_id=task.id,
+            employee_id=employee_id,
+            attempt_num=tte.attempts,
+            score=score,
+            is_passed=passed,
+            submit_time=datetime.now(),
+        )
+        db.session.add(history)
+
+        # 2. 更新员工总表
+        tte.score = score
+        tte.submit_time = datetime.now()
+        tte.is_passed = passed
+
+        # 达到最大次数，或通过，都算已完成
+        if passed or tte.attempts >= task.max_attempts:
+            tte.status = "已完成"
+        else:
+            tte.status = "未完成"
+
+        db.session.commit()
+
+        # 3. 返回
+        if not passed and tte.attempts >= task.max_attempts:
+            return jsonify(
+                {
+                    "success": False,
+                    "passed": False,
+                    "score": score,
+                    "total": total,
+                    "msg": "未通过且已用完所有答题机会",
+                    "attempts": tte.attempts,
+                    "max_attempts": task.max_attempts,
+                }
+            )
+        elif not passed:
+            return jsonify(
+                {
+                    "success": False,
+                    "passed": False,
+                    "score": score,
+                    "total": total,
+                    "msg": f"未通过，可重试（剩余{task.max_attempts - tte.attempts}次）",
+                    "attempts": tte.attempts,
+                    "max_attempts": task.max_attempts,
+                }
+            )
+        else:
+            return jsonify(
+                {
+                    "success": True,
+                    "passed": True,
+                    "score": score,
+                    "total": total,
+                    "msg": "答题通过！",
+                    "attempts": tte.attempts,
+                    "max_attempts": task.max_attempts,
+                }
+            )
+
+    return render_template(
+        "training_answer.html",
+        task=task,
+        material=material,
+        questions=parsed_questions,
+        employee=employee,
+        tte=tte,
+        chr=chr,
+    )
+
+
+@app.route("/training_answer_select/<int:task_id>", methods=["GET", "POST"])
+def training_answer_select(task_id):
+    task = TrainingTask.query.get(task_id)
+    # 找到所有参与该任务的员工
+    records = TrainingTaskEmployee.query.filter_by(task_id=task_id).all()
+    emp_ids = [rec.employee_id for rec in records]
+    employees = Employee.query.filter(Employee.id.in_(emp_ids)).all()
+    if request.method == "POST":
+        employee_id = request.form.get("employee_id")
+        return redirect(
+            url_for("training_answer", task_id=task_id, employee_id=employee_id)
+        )
+    return render_template(
+        "training_answer_select.html", task=task, employees=employees
+    )
+
+
+@app.route("/training_stats")
+@login_required
+def training_stats():
+    tasks = TrainingTask.query.order_by(TrainingTask.created_at.desc()).all()
+
+    data = []
+    for task in tasks:
+        material = TrainingMaterial.query.get(task.material_id)
+        ttes = TrainingTaskEmployee.query.filter_by(task_id=task.id).all()
+        total = len(ttes)
+        done = sum(1 for t in ttes if t.status == "已完成")
+        data.append(
+            {
+                "id": task.id,
+                "title": task.title,
+                "material": material.title if material else "(无)",
+                "created_at": task.created_at.strftime("%Y-%m-%d %H:%M"),
+                "deadline": (
+                    task.deadline.strftime("%Y-%m-%d") if task.deadline else "-"
+                ),
+                "progress": f"{done}/{total}",
+                "is_completed": done == total and total > 0,
+            }
+        )
+    return jsonify({"tasks": data})
+
+
+@app.route("/delete_training_task/<int:task_id>", methods=["POST"])
+@login_required
+def delete_training_task(task_id):
+    task = TrainingTask.query.get(task_id)
+    if not task:
+        return jsonify({"status": "not_found"}), 404
+
+    # 删除所有答题历史
+    TrainingAnswerHistory.query.filter_by(task_id=task_id).delete()
+    # 删除参与记录
+    TrainingTaskEmployee.query.filter_by(task_id=task_id).delete()
+    # 删除任务本身
+    db.session.delete(task)
+    db.session.commit()
+    return jsonify({"status": "success"})
+
+
+@app.route("/training_task/get/<int:task_id>")
+@login_required
+def training_task_get(task_id):
+    task = TrainingTask.query.get(task_id)
+    if not task:
+        return jsonify({"status": "not_found"})
+
+    material = TrainingMaterial.query.get(task.material_id)
+    ttes = TrainingTaskEmployee.query.filter_by(task_id=task_id).all()
+    employees = Employee.query.filter(
+        Employee.id.in_([t.employee_id for t in ttes])
+    ).all()
+    emp_map = {e.id: e for e in employees}
+
+    stats = {
+        "total": len(ttes),
+        "done": sum(1 for t in ttes if t.status == "已完成"),
+        "avg_score": (
+            round(sum((t.score or 0) for t in ttes) / len(ttes), 2) if ttes else 0
+        ),
+        "pass_ratio": (
+            round(100.0 * sum(1 for t in ttes if t.is_passed) / len(ttes), 2)
+            if ttes
+            else 0
+        ),
+    }
+
+    return jsonify(
+        {
+            "status": "success",
+            "task": {
+                "id": task.id,
+                "title": task.title,
+                "created_at": task.created_at.strftime("%Y-%m-%d %H:%M"),
+                "material": material.title if material else "(无)",
+                "deadline": task.deadline.strftime("%Y-%m-%d") if task.deadline else "",
+                "description": task.description or "",
+                "employees": [
+                    {"id": t.employee_id, "name": emp_map[t.employee_id].name}
+                    for t in ttes
+                ],
+                "stats": stats,
+            },
+        }
     )
 
 

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>培训任务已发布 ✅</title>
+    <style>
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            background-color: #f7f9fc;
+            padding: 40px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: auto;
+            background: #fff;
+            padding: 30px 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #2e8b57;
+        }
+
+        p {
+            font-size: 16px;
+        }
+
+        .link-box {
+            display: flex;
+            align-items: center;
+            margin-top: 12px;
+            gap: 10px;
+        }
+
+        input.copy-input {
+            width: 100%;
+            padding: 10px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+        button.copy-btn {
+            padding: 8px 14px;
+            font-size: 14px;
+            background-color: #2e8bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button.copy-btn:hover {
+            background-color: #1a6fe2;
+        }
+
+        h3 {
+            margin-top: 30px;
+        }
+
+        ul {
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+
+        .done {
+            color: green;
+            font-weight: bold;
+        }
+
+        .todo {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>培训任务已发布 ✅</h2>
+        <p>👇 请将以下链接发送到员工群，员工点击后选择身份进行答题：</p>
+        <div class="link-box">
+            <input type="text" class="copy-input" id="trainingLinkInput"
+                value="{{ base_url }}/training_answer_select/{{ task.id }}" readonly onclick="this.select()">
+            <button class="copy-btn" onclick="copyLink()">复制</button>
+        </div>
+
+        <h3>答题进度</h3>
+        <ul>
+            {% for emp in employees %}
+            <li>
+                {{ emp.name }} -
+                {% if emp.status == "已完成" %}
+                <span class="done">已完成 ✅</span>
+                {% else %}
+                <span class="todo">未完成</span>
+                {% endif %}
+                {% if histories[emp.id] %}
+                <ul style="margin:6px 0 4px 26px;color:#888;font-size:14px;">
+                    {% for h in histories[emp.id] %}
+                    <li>
+                        第{{ loop.index }}次: {{ h.score }}分
+                        {% if h.is_passed %}
+                        （通过）
+                        {% else %}
+                        （未通过）
+                        {% endif %}
+                        [{{ h.submit_time }}]
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <script>
+        function copyLink() {
+            const input = document.getElementById("trainingLinkInput");
+            input.select();
+            document.execCommand("copy");
+            alert("培训答题链接已复制 ✅");
+        }
+    </script>
+</body>
+
+</html>

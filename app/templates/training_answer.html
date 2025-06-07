@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <title>培训答题 - {{ task.title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <style>
+        .top-bar {
+            background: #fff;
+            padding: 10px 20px;
+            border-bottom: 1px solid #ddd;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .pdf-container {
+            width: 100%;
+            max-width: 900px;
+            margin: 24px auto 0 auto;
+            background: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        #pdf-wrapper {
+            overflow-x: auto;
+            padding-bottom: 8px;
+        }
+
+        .quiz-area {
+            max-width: 900px;
+            margin: 28px auto 0 auto;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px #0001;
+            padding: 24px 28px;
+        }
+
+        .quiz-question {
+            margin-bottom: 28px;
+            font-size: 17px;
+        }
+
+        .quiz-options {
+            margin-top: 8px;
+        }
+
+        .quiz-options label {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .btn-submit {
+            margin-top: 18px;
+            background: #2e8bff;
+            color: #fff;
+            font-size: 18px;
+            border-radius: 24px;
+            border: none;
+            padding: 12px 44px;
+            cursor: pointer;
+        }
+
+        .btn-submit:hover {
+            background: #166fd9;
+        }
+
+        .result-msg {
+            color: #2ecc71;
+            font-weight: bold;
+            font-size: 18px;
+            margin: 22px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="top-bar">
+        <h2>{{ task.title }}</h2>
+        <div style="font-size:15px;color:#888;margin-top:6px;">{{ material.title }}</div>
+        <div style="font-size:13px;color:#999;">员工：{{ employee.name }}</div>
+    </div>
+    <div id="pdf-wrapper"></div>
+
+    {% if tte and tte.status == "已完成" %}
+    <div class="quiz-area result-msg">你已完成本次培训答题，得分：{{ tte.score or 0 }}/{{ questions|length }}</div>
+    {% else %}
+    <form class="quiz-area" id="quizForm">
+        {% for q in questions %}
+        <div class="quiz-question">
+            <div style="font-weight:600;">Q{{ loop.index }}. {{ q.content }}</div>
+            <div class="quiz-options">
+                {% for opt in q.options %}
+                <label>
+                    <input type="radio" name="q{{ q.id }}" value="{{ loop.index0 }}" required>
+                    {{ chr(65+loop.index0) }}. {{ opt }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn-submit">提交答题</button>
+    </form>
+    {% endif %}
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script>
+        const pdfUrl = "/static/training_materials/{{ material.file_path }}";
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+        const wrapper = document.getElementById("pdf-wrapper");
+        function renderPDF(url) {
+            pdfjsLib.getDocument(url).promise.then(pdfDoc => {
+                for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+                    pdfDoc.getPage(pageNum).then(page => {
+                        const scale = 1.2;
+                        const viewport = page.getViewport({ scale });
+                        const container = document.createElement("div");
+                        container.className = "pdf-container";
+                        const canvas = document.createElement("canvas");
+                        const context = canvas.getContext("2d");
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        container.appendChild(canvas);
+                        canvas.style.width = "100%";
+                        canvas.style.height = "auto";
+                        page.render({ canvasContext: context, viewport });
+                        wrapper.appendChild(container);
+                    });
+                }
+            });
+        }
+        window.onload = () => { renderPDF(pdfUrl); };
+        // 答题提交
+        const quizForm = document.getElementById("quizForm");
+        if (quizForm) {
+            quizForm.onsubmit = function (e) {
+                e.preventDefault();
+                let data = {};
+                {% for q in questions %}
+                data["q{{ q.id }}"] = this["q{{ q.id }}"].value;
+                {% endfor %}
+                fetch("", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(data)
+                }).then(res => res.json()).then(d => {
+                    // 判断通过状态与机会
+                    if (d.success && d.passed) {
+                        alert("答题通过！得分：" + d.score + "/" + d.total);
+                        window.location.reload();
+                    } else if (d.success === false && d.attempts >= d.max_attempts) {
+                        // 最后一题未通过且用完机会
+                        alert(d.msg + "\n得分：" + (d.score ?? "--") + "/" + (d.total ?? "--"));
+                        window.location.reload(); // 直接刷新页面，进入“已完成”状态
+                    } else if (d.success === false && d.attempts < d.max_attempts) {
+                        // 未通过但还有机会
+                        alert(d.msg + "\n得分：" + (d.score ?? "--") + "/" + (d.total ?? "--"));
+                        // 不刷新，让用户重做
+                    } else if (d.msg) {
+                        alert("提交失败：" + d.msg);
+                    } else {
+                        alert("提交失败，请重试");
+                    }
+                });
+            };
+        }
+    </script>
+</body>
+
+</html>
