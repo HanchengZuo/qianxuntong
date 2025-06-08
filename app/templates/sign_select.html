@@ -91,7 +91,7 @@
         <form method="POST" action="/sign_select/{{ task_id }}">
             <select name="employee_id" required>
                 {% for emp in employees %}
-                <option value="{{ emp.local_id }}">{{ emp.name }}</option>
+                <option value="{{ emp.id }}">{{ emp.name }}</option>
                 {% endfor %}
             </select>
             <button type="submit">✅ 进入签名</button>

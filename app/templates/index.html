@@ -57,8 +57,8 @@
                             <div class="employee-list">
                                 {% for emp in employees %}
                                 <label class="employee-item">
-                                    <input type="checkbox" name="employee_ids" value="{{ emp.local_id }}">
-                                    <span>{{ emp.name }} <small>(#{{ emp.local_id }})</small></span>
+                                    <input type="checkbox" name="employee_ids" value="{{ emp.id }}">
+                                    <span>{{ emp.name }} <small>(#{{ emp.id }})</small></span>
                                 </label>
                                 {% endfor %}
                             </div>
@@ -88,6 +88,7 @@
                 <table class="record-table">
                     <thead>
                         <tr>
+                            <th>序号</th>
                             <th>ID</th>
                             <th>标题</th>
                             <th>创建时间</th>
@@ -98,6 +99,7 @@
                     <tbody>
                         {% for task in tasks %}
                         <tr>
+                            <td>{{ loop.index }}</td>
                             <td>{{ task.id }}</td>
                             <td>{{ task.title }}</td>
                             <td>{{ task.created_at }}</td>
@@ -134,6 +136,7 @@
                 <table class="record-table">
                     <thead>
                         <tr>
+                            <th>序号</th>
                             <th>ID</th>
                             <th>姓名</th>
                             <th>操作</th>
@@ -142,10 +145,11 @@
                     <tbody>
                         {% for emp in employees %}
                         <tr>
-                            <td>{{ emp.local_id }}</td>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ emp.id }}</td>
                             <td>{{ emp.name }}</td>
                             <td>
-                                <button class="btn-delete" onclick="deleteEmployee({{ emp.local_id }}, this, event)">🗑
+                                <button class="btn-delete" onclick="deleteEmployee({{ emp.id }}, this, event)">🗑
                                     删除</button>
                             </td>
                         </tr>
@@ -180,8 +184,8 @@
                                 <div class="employee-list">
                                     {% for emp in employees %}
                                     <label class="employee-item" style="margin-bottom:0;">
-                                        <input type="checkbox" name="employee_ids" value="{{ emp.local_id }}">
-                                        <span>{{ emp.name }} <small style="color:#bbb;">#{{ emp.local_id
+                                        <input type="checkbox" name="employee_ids" value="{{ emp.id }}">
+                                        <span>{{ emp.name }} <small style="color:#bbb;">#{{ emp.id
                                                 }}</small></span>
                                     </label>
                                     {% endfor %}
@@ -243,6 +247,7 @@
                 <table class="record-table">
                     <thead>
                         <tr>
+                            <th>序号</th>
                             <th>ID</th>
                             <th>标题</th>
                             <th>上传时间</th>
@@ -269,6 +274,7 @@
                 <table class="record-table">
                     <thead>
                         <tr>
+                            <th>序号</th>
                             <th>ID</th>
                             <th>题干</th>
                             <th>类型</th>
@@ -317,6 +323,7 @@
                 <table class="record-table" id="trainingStatsTable">
                     <thead>
                         <tr>
+                            <th>序号</th>
                             <th>ID</th>
                             <th>标题</th>
                             <th>材料</th>
@@ -363,6 +370,11 @@
             <div id="trainingRecordPrintA4"
                 style="display:none; width:794px; height:1123px; padding:40px; background:#fff; font-size:16px; color:#111; font-family:'SimSun',serif; ">
                 <!-- 这里由JS填充排版内容 -->
+            </div>
+
+            <div id="msgModal" style="display:none;position:fixed;...">
+                <div id="msgModalContent"></div>
+                <button onclick="closeMsgModal()">关闭</button>
             </div>
 
         </div>

@@ -32,5 +32,18 @@ services:
       - db
     restart: always
 
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    platform: linux/amd64
+    container_name: myadmin
+    environment:
+      PMA_HOST: db # 注意这里用 db（就是上面的服务名），不是qxt-mysql
+      TZ: Asia/Shanghai
+    ports:
+      - "8080:80"
+    depends_on:
+      - db
+    restart: always
+
 volumes:
   mysql_data:

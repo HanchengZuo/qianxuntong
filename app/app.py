@@ -80,13 +80,9 @@ class SignatureStatus(db.Model):
 
 
 class Employee(db.Model):
-    __table_args__ = (
-        db.UniqueConstraint("user_id", "local_id"),
-        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
-    )
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)  # 物理主键
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    local_id = db.Column(db.Integer, nullable=False)  # 用户空间自增逻辑id
     name = db.Column(db.String(50), nullable=False)
 
 
@@ -255,7 +251,7 @@ def index():
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         pdf_file = request.files.get("pdf")
-        employee_ids = request.form.getlist("employee_ids")  # ✅ 获取选中的员工 ID 列表
+        employee_ids = [int(eid) for eid in request.form.getlist("employee_ids")]
         quiz_required = bool(request.form.get("quiz_required"))
 
         if not title or not pdf_file or not pdf_file.filename.endswith(".pdf"):
@@ -271,45 +267,60 @@ def index():
         save_path = os.path.join(user_folder, f"{task_id}_{filename}")
         pdf_file.save(save_path)
 
-        # ✅ 创建签名任务记录
+        # 创建签名任务记录
         task = SignatureTask(
             user_id=current_user.id,
             task_id=task_id,
             title=title,
             employee_ids=json.dumps(employee_ids),
-            quiz_required=quiz_required,  # ✅ 添加字段
+            quiz_required=quiz_required,
         )
         db.session.add(task)
         db.session.commit()
 
-        # ✅ 将选中的员工 ID 保存到 SignatureStatus 表中，签名状态暂设为 False
+        # 保存员工签名状态
         for emp_id in employee_ids:
-            status = SignatureStatus(
-                user_id=current_user.id,
-                task_id=task_id,
-                employee_id=int(emp_id),
-                signed=False,
-            )
-            db.session.add(status)
-
+            emp = Employee.query.filter_by(id=emp_id, user_id=current_user.id).first()
+            if emp:
+                status = SignatureStatus(
+                    user_id=current_user.id,
+                    task_id=task_id,
+                    employee_id=emp.id,
+                    signed=False,
+                )
+                db.session.add(status)
         db.session.commit()
 
-        # ✅ 解析题库内容
-        quiz_items = []
-        i = 0
-        while True:
-            content = request.form.get(f"questions[{i}][content]")
+        # =========== 题库校验 =============
+        import re
+
+        question_keys = [
+            k
+            for k in request.form.keys()
+            if re.match(r"questions\[(\d+)]\[content]", k)
+        ]
+        question_indexes = sorted(
+            {
+                int(re.findall(r"questions\[(\d+)]\[content]", k)[0])
+                for k in question_keys
+            }
+        )
+
+        for i in question_indexes:
+            content = request.form.get(f"questions[{i}][content]", "").strip()
             if not content:
-                break
-            # 用 getlist 获取所有选项
+                # 跳过未填写内容的题（通常是空白行）
+                continue
             options = request.form.getlist(f"questions[{i}][options][]")
-            # 单选题只会有一组答案
             answer = request.form.get(f"questions[{i}][answers]")
-            # 这里你可能还要处理 answers 是字符串还是数字（取决于你的前端 input value）
+            if answer is None or str(answer).strip() == "":
+                return f"第{i+1}题未选择正确答案，请返回完善后再提交", 400
+            if len(options) < 2:
+                return f"第{i+1}题选项不足2个", 400
             try:
-                correct_answers = [int(answer)] if answer is not None else []
+                correct_answers = [int(answer)]
             except Exception:
-                correct_answers = []
+                return f"第{i+1}题正确答案格式不正确", 400
 
             quiz = QuizQuestion(
                 user_id=current_user.id,
@@ -319,8 +330,6 @@ def index():
                 correct_answers=json.dumps(correct_answers),
             )
             db.session.add(quiz)
-            i += 1
-
         db.session.commit()
 
         return redirect(url_for("preview", task_id=task_id))
@@ -352,7 +361,7 @@ def index():
 
     employees = (
         Employee.query.filter_by(user_id=current_user.id)
-        .order_by(Employee.local_id.desc())
+        .order_by(Employee.id.desc())
         .all()
     )
     materials = (
@@ -369,25 +378,23 @@ def index():
 @login_required
 def add_employee():
     name = request.form["name"]
-    # 查找该用户下已有员工最大local_id
-    max_local = (
-        db.session.query(db.func.max(Employee.local_id))
-        .filter_by(user_id=current_user.id)
-        .scalar()
-    )
-    next_local_id = 1 if max_local is None else max_local + 1
-
-    new_emp = Employee(name=name, user_id=current_user.id, local_id=next_local_id)
+    new_emp = Employee(name=name, user_id=current_user.id)
     db.session.add(new_emp)
     db.session.commit()
-    return jsonify({"status": "success", "id": new_emp.local_id, "name": new_emp.name})
+    return jsonify({"status": "success", "id": new_emp.id, "name": new_emp.name})
 
 
-@app.route("/employee/delete/<int:local_id>", methods=["POST"])
+@app.route("/employee/delete/<int:id>", methods=["POST"])
 @login_required
-def delete_employee(local_id):
-    emp = Employee.query.filter_by(user_id=current_user.id, local_id=local_id).first()
+def delete_employee(id):
+    emp = Employee.query.filter_by(user_id=current_user.id, id=id).first()
     if emp:
+        # 先删所有有关的子表数据
+        SignatureStatus.query.filter_by(employee_id=emp.id).delete()
+        SignatureBox.query.filter_by(employee_id=emp.id).delete()
+        TrainingTaskEmployee.query.filter_by(employee_id=emp.id).delete()
+        TrainingAnswerHistory.query.filter_by(employee_id=emp.id).delete()
+
         db.session.delete(emp)
         db.session.commit()
         return jsonify({"status": "success"})
@@ -405,7 +412,7 @@ def preview(task_id):
     employees_raw = Employee.query.filter_by(user_id=current_user.id).all()
     employees = [
         {
-            "local_id": emp.local_id,
+            "id": emp.id,
             "name": emp.name,
         }
         for emp in employees_raw
@@ -422,7 +429,16 @@ def preview(task_id):
     )
 
     if not uploaded_filename:
-        return "未找到上传的 PDF 文件", 404
+        return (
+            render_template(
+                "message.html",
+                title="未找到文件",
+                msg="未找到上传的 PDF 文件",
+                btn_text="返回首页",
+                back_url=url_for("index"),
+            ),
+            404,
+        )
 
     encoded_filename = quote(uploaded_filename)  # ✅ URL 编码
 
@@ -449,9 +465,17 @@ def save_box(task_id):
     # 批量插入每个box
     for box in box_data:
         try:
+            # ⭐⭐ 这里做一次 id -> 主键 id 的映射 ⭐⭐
+            emp = Employee.query.filter_by(
+                user_id=current_user.id, id=int(box["employee_id"])
+            ).first()
+            if not emp:
+                print(f"❌ employee not found for id={box['employee_id']}")
+                continue  # 跳过找不到的
+
             new_box = SignatureBox(
                 task_id=task_id,
-                employee_id=int(box["employee_id"]),
+                employee_id=emp.id,  # 用主键 id!!
                 page=int(box["page"]),
                 left=float(box["left"]),
                 top=float(box["top"]),
@@ -505,7 +529,16 @@ def submit_sign(task_id):
         user_id=current_user.id, task_id=task_id
     ).first()
     if task and task.is_completed:
-        return jsonify({"status": "error", "msg": "该签名任务已完成，无法提交签名"})
+        return (
+            render_template(
+                "message.html",
+                title="无法签名",
+                msg="该签名任务已完成，无法继续签名",
+                btn_text="返回首页",
+                back_url=url_for("index"),
+            ),
+            403,
+        )
 
     data = request.get_json()
     print(f"👉 [SIGN] task_id={task_id} data={data}")
@@ -626,7 +659,7 @@ def invite_page(task_id):
     # 获取这些员工的信息
     employees = (
         Employee.query.filter_by(user_id=current_user.id)
-        .filter(Employee.local_id.in_(employee_ids))
+        .filter(Employee.id.in_(employee_ids))
         .all()
     )
 
@@ -699,7 +732,16 @@ def sign_select(task_id):
         user_id=current_user.id, task_id=task_id
     ).first()
     if task and task.is_completed:
-        return "该签名任务已完成，无法继续签名", 403
+        return (
+            render_template(
+                "message.html",
+                title="无法签名",
+                msg="该签名任务已完成，无法继续签名",
+                btn_text="返回首页",
+                back_url=url_for("index"),
+            ),
+            403,
+        )
 
     if request.method == "POST":
         employee_id = request.form.get("employee_id")
@@ -727,14 +769,32 @@ def sign_page_employee(task_id, employee_id):
         user_id=current_user.id, task_id=task_id
     ).first()
     if not task:
-        return "签名任务不存在", 404
+        return (
+            render_template(
+                "message.html",
+                title="任务不存在",
+                msg="签名任务不存在",
+                btn_text="返回首页",
+                back_url=url_for("index"),
+            ),
+            404,
+        )
 
     # ✅ 检查是否任务已完成
     status = SignatureStatus.query.filter_by(
         user_id=current_user.id, task_id=task_id, employee_id=employee_id
     ).first()
     if status and status.signed:
-        return "您已完成签名，无法再次签名", 403
+        return (
+            render_template(
+                "message.html",
+                title="已签名",
+                msg="您已完成签名，无法再次签名",
+                btn_text="返回首页",
+                back_url=url_for("index"),
+            ),
+            403,
+        )
 
     # ✅ 获取 quiz 状态，前端判断是否允许签名，不再强制跳 quiz
     quiz_passed = status.quiz_passed if status else False
@@ -771,12 +831,19 @@ def sign_page_employee(task_id, employee_id):
         None,
     )
     if not uploaded_filename:
-        return "PDF 文件未找到", 404
+        return (
+            render_template(
+                "message.html",
+                title="未找到文件",
+                msg="未找到上传的 PDF 文件",
+                btn_text="返回首页",
+                back_url=url_for("index"),
+            ),
+            404,
+        )
 
     encoded_title = quote(uploaded_filename)
-    employee = Employee.query.filter_by(
-        user_id=current_user.id, local_id=employee_id
-    ).first()
+    employee = Employee.query.filter_by(user_id=current_user.id, id=employee_id).first()
     employee_name = employee.name if employee else ""
 
     return render_template(
@@ -798,7 +865,16 @@ def quiz_page(task_id, employee_id):
         user_id=current_user.id, task_id=task_id
     ).first()
     if not task:
-        return jsonify({"success": False, "msg": "签名任务不存在"}), 404
+        return (
+            render_template(
+                "message.html",
+                title="任务不存在",
+                msg="签名任务不存在",
+                btn_text="返回首页",
+                back_url=url_for("index"),
+            ),
+            404,
+        )
 
     questions = QuizQuestion.query.filter_by(
         user_id=current_user.id, task_id=task_id
