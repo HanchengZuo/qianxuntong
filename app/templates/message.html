@@ -6,22 +6,36 @@
     <title>提示</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
+        html,
         body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
             background: #f8f9fa;
             color: #333;
-            margin: 0;
             font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+
+        body {
             min-height: 100vh;
+            width: 100vw;
+            box-sizing: border-box;
+            /* 用flex居中所有内容 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .msg-card {
             background: #fff;
-            margin: 8vh auto 0 auto;
             padding: 32px 28px 24px 28px;
             border-radius: 16px;
             box-shadow: 0 2px 16px #0001;
             max-width: 96vw;
             width: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
         .msg-card h2 {
@@ -30,12 +44,14 @@
             font-size: 22px;
             color: #2e8bff;
             font-weight: 600;
+            text-align: center;
         }
 
         .msg-card .msg-main {
             font-size: 18px;
             margin-bottom: 22px;
             word-break: break-all;
+            text-align: center;
         }
 
         .msg-card button {
@@ -57,7 +73,6 @@
             .msg-card {
                 width: 97vw;
                 padding: 18px 7vw 18px 7vw;
-                margin-top: 18vw;
             }
 
             .msg-card h2 {
@@ -81,8 +96,8 @@
     <div class="msg-card">
         <h2>{{ title or "提示" }}</h2>
         <div class="msg-main">{{ msg }}</div>
-        <button onclick="window.location.href='{{ back_url or '/' }}'">
-            {{ btn_text or "返回首页" }}
+        <button onclick="window.close();">
+            {{ btn_text or "关闭页面" }}
         </button>
     </div>
 </body>

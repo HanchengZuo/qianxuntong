@@ -28,13 +28,15 @@ from flask_login import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
+
+# ========== Flask app与数据库配置 ==========
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "very-secret-key-123456"
 app.config["UPLOAD_FOLDER"] = "static/uploads"
 app.config["FINAL_FOLDER"] = "static/final"
 app.config["SIGN_URL"] = "http://127.0.0.1:5000/sign/"
 
-# 让 Flask 支持通过环境变量读取数据库连接
+# 读取数据库连接（支持环境变量）
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
     "DATABASE_URL", "mysql+pymysql://root:qxt123456@db:3306/qianxuntong?charset=utf8mb4"
 )
@@ -44,10 +46,27 @@ db = SQLAlchemy(app)
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 os.makedirs(app.config["FINAL_FOLDER"], exist_ok=True)
 
-# 定义中国时区
-CHINA_TZ = timezone("Asia/Shanghai")
+CHINA_TZ = timezone("Asia/Shanghai")  # 定义中国时区
 
 
+# ========== 数据库模型定义 ==========
+# --- 用户表 ---
+class User(UserMixin, db.Model):
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+
+
+# --- 员工表 ---
+class Employee(db.Model):
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    id = db.Column(db.Integer, primary_key=True)  # 物理主键
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    name = db.Column(db.String(50), nullable=False)
+
+
+# --- 签名任务表 ---
 class SignatureTask(db.Model):
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)
@@ -66,6 +85,7 @@ class SignatureTask(db.Model):
             return []
 
 
+# --- 员工签名状态表 ---
 class SignatureStatus(db.Model):
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)
@@ -79,13 +99,7 @@ class SignatureStatus(db.Model):
     quiz_passed = db.Column(db.Boolean, default=False)
 
 
-class Employee(db.Model):
-    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
-    id = db.Column(db.Integer, primary_key=True)  # 物理主键
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    name = db.Column(db.String(50), nullable=False)
-
-
+# --- 签名任务题库（答题）表 ---
 class QuizQuestion(db.Model):
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)
@@ -103,14 +117,7 @@ class QuizQuestion(db.Model):
     multiple = db.Column(db.Boolean, default=False)  # 是否为多选题
 
 
-class User(UserMixin, db.Model):
-    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
-
-
-# 签名区域表
+# --- 签名框区域表 ---
 class SignatureBox(db.Model):
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)
@@ -129,6 +136,7 @@ class SignatureBox(db.Model):
     preview_height = db.Column(db.Float)
 
 
+# --- 培训材料表 ---
 class TrainingMaterial(db.Model):
     __tablename__ = "training_material"
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
@@ -140,6 +148,7 @@ class TrainingMaterial(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+# --- 培训题库表 ---
 class TrainingQuestion(db.Model):
     __tablename__ = "training_question"
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
@@ -154,6 +163,7 @@ class TrainingQuestion(db.Model):
     multiple = db.Column(db.Boolean, default=False)
 
 
+# --- 培训任务表 ---
 class TrainingTask(db.Model):
     __tablename__ = "training_task"
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
@@ -167,6 +177,7 @@ class TrainingTask(db.Model):
     pass_score_ratio = db.Column(db.Float, default=0.8)  # 通过所需正确率（如0.8=80%）
 
 
+# --- 培训任务-员工关联表 ---
 class TrainingTaskEmployee(db.Model):
     __tablename__ = "training_task_employee"
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
@@ -180,6 +191,7 @@ class TrainingTaskEmployee(db.Model):
     is_passed = db.Column(db.Boolean, default=False)  # 是否已通过
 
 
+# --- 培训答题历史表 ---
 class TrainingAnswerHistory(db.Model):
     __tablename__ = "training_answer_history"
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
@@ -192,12 +204,9 @@ class TrainingAnswerHistory(db.Model):
     submit_time = db.Column(db.DateTime, default=datetime.now)
 
 
-def parse_answers(answer_str):
-    mapping = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4, "F": 5}
-    answer_str = answer_str.upper().replace(" ", "")
-    return [mapping[c] for c in answer_str.split(",") if c in mapping]
-
-
+# ===============================
+# 1. 登录/注册/用户体系（系统通用区）
+# ===============================
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
 
@@ -245,6 +254,42 @@ def logout():
     return redirect(url_for("login"))
 
 
+# ===============================
+# 2. 员工管理区（全系统基础数据）
+# ===============================
+# 新增员工API，前端表单调用
+@app.route("/employee/new", methods=["POST"])
+@login_required
+def add_employee():
+    name = request.form["name"]
+    new_emp = Employee(name=name, user_id=current_user.id)
+    db.session.add(new_emp)
+    db.session.commit()
+    return jsonify({"status": "success", "id": new_emp.id, "name": new_emp.name})
+
+
+# 删除员工API，同时级联删除相关记录
+@app.route("/employee/delete/<int:id>", methods=["POST"])
+@login_required
+def delete_employee(id):
+    emp = Employee.query.filter_by(user_id=current_user.id, id=id).first()
+    if emp:
+        # 先删所有有关的子表数据
+        SignatureStatus.query.filter_by(employee_id=emp.id).delete()
+        SignatureBox.query.filter_by(employee_id=emp.id).delete()
+        TrainingTaskEmployee.query.filter_by(employee_id=emp.id).delete()
+        TrainingAnswerHistory.query.filter_by(employee_id=emp.id).delete()
+
+        db.session.delete(emp)
+        db.session.commit()
+        return jsonify({"status": "success"})
+    return jsonify({"status": "not_found"}), 404
+
+
+# ===============================
+# 3. 签名任务系统（上传、配置、签名、进度管理）
+# ===============================
+# 首页与签名任务主入口
 @app.route("/", methods=["GET", "POST"])
 @login_required
 def index():
@@ -374,33 +419,7 @@ def index():
     )
 
 
-@app.route("/employee/new", methods=["POST"])
-@login_required
-def add_employee():
-    name = request.form["name"]
-    new_emp = Employee(name=name, user_id=current_user.id)
-    db.session.add(new_emp)
-    db.session.commit()
-    return jsonify({"status": "success", "id": new_emp.id, "name": new_emp.name})
-
-
-@app.route("/employee/delete/<int:id>", methods=["POST"])
-@login_required
-def delete_employee(id):
-    emp = Employee.query.filter_by(user_id=current_user.id, id=id).first()
-    if emp:
-        # 先删所有有关的子表数据
-        SignatureStatus.query.filter_by(employee_id=emp.id).delete()
-        SignatureBox.query.filter_by(employee_id=emp.id).delete()
-        TrainingTaskEmployee.query.filter_by(employee_id=emp.id).delete()
-        TrainingAnswerHistory.query.filter_by(employee_id=emp.id).delete()
-
-        db.session.delete(emp)
-        db.session.commit()
-        return jsonify({"status": "success"})
-    return jsonify({"status": "not_found"}), 404
-
-
+# 预览签名任务主页面，主要传递PDF/签名区域/员工数据
 @app.route("/preview/<task_id>")
 @login_required
 def preview(task_id):
@@ -434,7 +453,7 @@ def preview(task_id):
                 "message.html",
                 title="未找到文件",
                 msg="未找到上传的 PDF 文件",
-                btn_text="返回首页",
+                btn_text="关闭页面",
                 back_url=url_for("index"),
             ),
             404,
@@ -453,6 +472,7 @@ def preview(task_id):
     )
 
 
+# 保存签名区域，前端配置签名框后调用
 @app.route("/save_box/<task_id>", methods=["POST"])
 @login_required
 def save_box(task_id):
@@ -470,7 +490,6 @@ def save_box(task_id):
                 user_id=current_user.id, id=int(box["employee_id"])
             ).first()
             if not emp:
-                print(f"❌ employee not found for id={box['employee_id']}")
                 continue  # 跳过找不到的
 
             new_box = SignatureBox(
@@ -494,6 +513,7 @@ def save_box(task_id):
     return jsonify({"status": "success"})
 
 
+# 签名主页面（员工签名入口，批量签）
 @app.route("/sign/<task_id>")
 @login_required
 def sign_page(task_id):
@@ -522,6 +542,7 @@ def sign_page(task_id):
     return render_template("sign.html", task_id=task_id, boxes=box_list)
 
 
+# 签名提交API，保存签名图、状态并自动合成PDF
 @app.route("/submit_sign/<task_id>", methods=["POST"])
 @login_required
 def submit_sign(task_id):
@@ -535,13 +556,11 @@ def submit_sign(task_id):
                 title="无法签名",
                 msg="该签名任务已完成，无法继续签名",
                 btn_text="返回首页",
-                back_url=url_for("index"),
             ),
             403,
         )
 
     data = request.get_json()
-    print(f"👉 [SIGN] task_id={task_id} data={data}")
 
     if not data or not isinstance(data, list):
         return jsonify({"status": "error", "msg": "缺少签名数据"})
@@ -584,7 +603,6 @@ def submit_sign(task_id):
         user_id=current_user.id, task_id=task_id
     ).all()
     if all(s.signed for s in all_statuses):
-        print("📄 所有签名区域已签名，开始合成 PDF")
 
         user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(current_user.id))
         pdf_path = next(
@@ -645,6 +663,7 @@ def sign_submitted(task_id):
     return render_template("sign_submitted.html", task_id=task_id)
 
 
+# 签名邀请、分员工签名入口
 @app.route("/invite/<task_id>")
 @login_required
 def invite_page(task_id):
@@ -677,12 +696,14 @@ def invite_page(task_id):
     )
 
 
+# Canvas签名绘制页面
 @app.route("/sign_canvas/<task_id>", defaults={"employee_id": None})
 @app.route("/sign_canvas/<task_id>/<int:employee_id>")
 def sign_canvas(task_id, employee_id):
     return render_template("sign_canvas.html", task_id=task_id, employee_id=employee_id)
 
 
+# 删除签名任务，级联删除所有相关文件和记录
 @app.route("/delete_record/<task_id>", methods=["POST"])
 @login_required
 def delete_record(task_id):
@@ -725,6 +746,7 @@ def delete_record(task_id):
     return jsonify({"status": "not_found"}), 404
 
 
+# 签名前选择员工身份页面
 @app.route("/sign_select/<task_id>", methods=["GET", "POST"])
 @login_required
 def sign_select(task_id):
@@ -737,8 +759,7 @@ def sign_select(task_id):
                 "message.html",
                 title="无法签名",
                 msg="该签名任务已完成，无法继续签名",
-                btn_text="返回首页",
-                back_url=url_for("index"),
+                btn_text="关闭页面",
             ),
             403,
         )
@@ -761,6 +782,7 @@ def sign_select(task_id):
     return render_template("sign_select.html", task_id=task_id, employees=employees)
 
 
+# 针对指定员工的签名页
 @app.route("/sign/<task_id>/<int:employee_id>")
 @login_required
 def sign_page_employee(task_id, employee_id):
@@ -774,8 +796,7 @@ def sign_page_employee(task_id, employee_id):
                 "message.html",
                 title="任务不存在",
                 msg="签名任务不存在",
-                btn_text="返回首页",
-                back_url=url_for("index"),
+                btn_text="关闭页面",
             ),
             404,
         )
@@ -790,8 +811,7 @@ def sign_page_employee(task_id, employee_id):
                 "message.html",
                 title="已签名",
                 msg="您已完成签名，无法再次签名",
-                btn_text="返回首页",
-                back_url=url_for("index"),
+                btn_text="关闭页面",
             ),
             403,
         )
@@ -836,8 +856,7 @@ def sign_page_employee(task_id, employee_id):
                 "message.html",
                 title="未找到文件",
                 msg="未找到上传的 PDF 文件",
-                btn_text="返回首页",
-                back_url=url_for("index"),
+                btn_text="关闭页面",
             ),
             404,
         )
@@ -858,6 +877,10 @@ def sign_page_employee(task_id, employee_id):
     )
 
 
+# ===============================
+# 4. 签名任务答题功能（签名前答题环节）
+# ===============================
+# 员工签名前答题入口，答题通过后允许签名
 @app.route("/sign_quiz/<task_id>/<int:employee_id>", methods=["GET", "POST"])
 @login_required
 def quiz_page(task_id, employee_id):
@@ -870,8 +893,7 @@ def quiz_page(task_id, employee_id):
                 "message.html",
                 title="任务不存在",
                 msg="签名任务不存在",
-                btn_text="返回首页",
-                back_url=url_for("index"),
+                btn_text="关闭页面",
             ),
             404,
         )
@@ -936,6 +958,10 @@ def quiz_page(task_id, employee_id):
     )
 
 
+# ===============================
+# 5. 培训系统 —— 材料管理
+# ===============================
+# 上传材料API，存文件及记录
 @app.route("/training_materials", methods=["POST"])
 @login_required
 def training_materials():
@@ -971,6 +997,7 @@ def training_materials():
     )
 
 
+# 材料列表API，返回JSON
 @app.route("/training_materials/list")
 @login_required
 def training_materials_list():
@@ -992,6 +1019,7 @@ def training_materials_list():
     return jsonify({"mats": [mat2dict(m) for m in mats]})
 
 
+# 删除材料API
 @app.route("/training_materials/delete/<int:mat_id>", methods=["POST"])
 @login_required
 def delete_material(mat_id):
@@ -1006,6 +1034,10 @@ def delete_material(mat_id):
     return jsonify({"status": "not_found"}), 404
 
 
+# ===============================
+# 6. 培训系统 —— 题库管理
+# ===============================
+# 加载某材料下题目
 @app.route("/training_questions/list")
 @login_required
 def training_questions_list():
@@ -1030,6 +1062,7 @@ def training_questions_list():
     return jsonify({"questions": [q2dict(q) for q in questions]})
 
 
+# 新建题目API
 @app.route("/training_questions/new", methods=["POST"])
 @login_required
 def training_question_new():
@@ -1047,6 +1080,7 @@ def training_question_new():
     return jsonify({"status": "success"})
 
 
+# 获取题目信息API
 @app.route("/training_questions/get/<int:qid>")
 @login_required
 def training_question_get(qid):
@@ -1067,6 +1101,7 @@ def training_question_get(qid):
     )
 
 
+# 编辑题目API
 @app.route("/training_questions/edit/<int:qid>", methods=["POST"])
 @login_required
 def training_question_edit(qid):
@@ -1082,6 +1117,7 @@ def training_question_edit(qid):
     return jsonify({"status": "success"})
 
 
+# 删除题目API
 @app.route("/training_questions/delete/<int:qid>", methods=["POST"])
 @login_required
 def training_question_delete(qid):
@@ -1093,7 +1129,10 @@ def training_question_delete(qid):
     return jsonify({"status": "success"})
 
 
-# 新建培训任务
+# ===============================
+# 7. 培训系统 —— 培训任务管理/分配/答题/统计
+# ===============================
+# 新建培训任务及参与员工API
 @app.route("/training_task/new", methods=["POST"])
 @login_required
 def create_training_task():
@@ -1106,7 +1145,17 @@ def create_training_task():
     pass_score_ratio = float(request.form.get("pass_score_ratio", 80)) / 100.0
 
     if not (title and material_id and employee_ids):
-        return "缺少必要参数", 400
+        return jsonify({"status": "fail", "msg": "缺少必要参数"})
+
+    # 校验该材料下题目数量
+    num_questions = TrainingQuestion.query.filter_by(material_id=material_id).count()
+    if num_questions == 0:
+        return jsonify(
+            {
+                "status": "fail",
+                "msg": "该培训材料没有任何题目，请先添加题库再发布培训任务。",
+            }
+        )
 
     # 1. 创建 TrainingTask
     task = TrainingTask(
@@ -1126,9 +1175,15 @@ def create_training_task():
         rec = TrainingTaskEmployee(task_id=task.id, employee_id=emp_id, status="未完成")
         db.session.add(rec)
     db.session.commit()
-    return redirect(url_for("training_task_invite", task_id=task.id))
+    return jsonify(
+        {
+            "status": "success",
+            "redirect": url_for("training_task_invite", task_id=task.id),
+        }
+    )
 
 
+# 培训任务详情页（员工及成绩等）
 @app.route("/training_task/<int:task_id>")
 @login_required
 def training_task_detail(task_id):
@@ -1161,6 +1216,7 @@ def training_task_detail(task_id):
     )
 
 
+# 培训答题邀请页
 @app.route("/training_task/invite/<int:task_id>")
 @login_required
 def training_task_invite(task_id):
@@ -1204,6 +1260,7 @@ def training_task_invite(task_id):
     )
 
 
+# 员工答题主入口，支持提交、计分、历史记录
 @app.route("/training_answer/<int:task_id>/<int:employee_id>", methods=["GET", "POST"])
 def training_answer(task_id, employee_id):
     tte = TrainingTaskEmployee.query.filter_by(
@@ -1354,6 +1411,7 @@ def training_answer(task_id, employee_id):
     )
 
 
+# 答题前选择员工身份页
 @app.route("/training_answer_select/<int:task_id>", methods=["GET", "POST"])
 def training_answer_select(task_id):
     task = TrainingTask.query.get(task_id)
@@ -1371,6 +1429,7 @@ def training_answer_select(task_id):
     )
 
 
+# 培训任务全局统计（供前端展示列表）
 @app.route("/training_stats")
 @login_required
 def training_stats():
@@ -1398,6 +1457,7 @@ def training_stats():
     return jsonify({"tasks": data})
 
 
+# 删除培训任务API，级联删除所有关联
 @app.route("/delete_training_task/<int:task_id>", methods=["POST"])
 @login_required
 def delete_training_task(task_id):
@@ -1415,6 +1475,7 @@ def delete_training_task(task_id):
     return jsonify({"status": "success"})
 
 
+# 获取培训任务详情及统计数据API
 @app.route("/training_task/get/<int:task_id>")
 @login_required
 def training_task_get(task_id):
@@ -1462,6 +1523,9 @@ def training_task_get(task_id):
     )
 
 
+# ===============================
+# 8. 启动/运维/其它扩展
+# ===============================
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()  # 首次启动创建所有表

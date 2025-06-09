@@ -6,22 +6,35 @@
     <title>无法作答</title>
     <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1">
     <style>
+        html,
+        body {
+            height: 100%;
+        }
+
         body {
             font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
             background: #f7f9fc;
             margin: 0;
             padding: 0;
             min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
 
         .container {
             max-width: 420px;
-            margin: 72px auto 0 auto;
+            width: 94vw;
+            margin: auto;
             background: #fff;
             border-radius: 18px;
             padding: 40px 28px 34px 28px;
             text-align: center;
             box-shadow: 0 8px 36px rgba(44, 150, 220, 0.09), 0 1.5px 7px #0001;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
         .icon-warning {
@@ -37,6 +50,7 @@
             margin-bottom: 18px;
             color: #d03528;
             letter-spacing: 0.5px;
+            word-break: break-all;
         }
 
         .info {
@@ -46,36 +60,37 @@
             border-radius: 8px;
             margin: 0 auto 12px auto;
             padding: 15px 8px 13px 8px;
-            width: 90%;
+            width: 95%;
             line-height: 1.9;
             box-sizing: border-box;
         }
 
-        .back-btn {
+        .close-btn {
             margin-top: 14px;
-            padding: 9px 36px;
-            font-size: 16px;
+            padding: 10px 42px;
+            font-size: 17px;
             background: #2e8bff;
             color: #fff;
             border: none;
-            border-radius: 22px;
+            border-radius: 24px;
             cursor: pointer;
             box-shadow: 0 2px 10px #2e8bff22;
             transition: background 0.18s;
         }
 
-        .back-btn:hover {
+        .close-btn:active {
             background: #166fd9;
         }
 
         @media (max-width: 480px) {
             .container {
-                margin: 30px 5vw 0 5vw;
-                padding: 28px 10px 18px 10px;
+                max-width: 99vw;
+                margin: 18px 0 0 0;
+                padding: 24px 6vw 20px 6vw;
             }
 
             .info {
-                width: 98%;
+                width: 100%;
             }
         }
     </style>
@@ -93,8 +108,24 @@
             </div>
         </div>
         {% endif %}
-        <button class="back-btn" onclick="window.location.href='/'">返回首页</button>
+        <button class="close-btn" onclick="closePage()">关闭页面</button>
     </div>
+    <script>
+        function closePage() {
+            // 微信小程序/公众号
+            if (window.wx && wx.miniProgram) {
+                wx.miniProgram.navigateBack();
+            } else if (typeof WeixinJSBridge !== "undefined") {
+                WeixinJSBridge.call('closeWindow');
+            } else if (window.AlipayJSBridge) {
+                AlipayJSBridge.call('closeWebview');
+            } else if (window.opener) {
+                window.close();
+            } else {
+                alert("请手动关闭此页面");
+            }
+        }
+    </script>
 </body>
 
 </html>
