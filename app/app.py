@@ -27,6 +27,11 @@ from flask_login import (
     current_user,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
+import tempfile
+import platform
+from flask import request, send_file, jsonify
+from docx import Document
+from docx.shared import Pt
 
 
 # ========== Flask app与数据库配置 ==========
@@ -1520,6 +1525,97 @@ def training_task_get(task_id):
                 "stats": stats,
             },
         }
+    )
+
+
+@app.route("/api/export_training_record", methods=["POST"])
+def export_training_record():
+    data = request.get_json()
+    template_path = os.path.join(
+        app.root_path, "static", "training_records", "培训记录表.docx"
+    )
+    doc = Document(template_path)
+
+    # ===== 修改“站名”段落文字 =====
+    for para in doc.paragraphs:
+        if "站名" in para.text:
+            para.text = f"站名：{data.get('station','')}"
+            for run in para.runs:
+                run.font.name = "宋体"
+                run.font.size = Pt(12)
+            break
+
+    # 2. 填“填表/日期” & “审核日期”
+    for para in doc.paragraphs:
+        if para.text.strip().startswith("填表/日期"):
+            para.text = (
+                f"填表/日期：{data.get('date','')}\t\t\t\t\t\t\t"
+                f"审核日期：{data.get('reviewDate','')}"
+            )
+            for run in para.runs:
+                run.font.name = "宋体"
+                run.font.size = Pt(12)
+            break
+
+    # ===== 填充表格字段 =====
+    table = doc.tables[0]
+    print("行数：", len(table.rows))
+    for i, row in enumerate(table.rows):
+        print(f"第{i}行 列数：{len(row.cells)}")
+
+    try:
+        table.cell(0, 1).text = data.get("title", "")
+        table.cell(0, 3).text = data.get("place", "")
+        table.cell(1, 1).text = data.get("time", "")
+        table.cell(1, 3).text = data.get("trainer", "")
+        table.cell(2, 1).text = data.get("employees", "")
+        table.cell(4, 1).text = data.get("summary", "")
+        table.cell(5, 1).text = data.get("result", "")
+        table.cell(6, 1).text = data.get("note", "")
+    except Exception as e:
+        print("填表异常", e)
+        return jsonify({"status": "fail", "msg": f"填表异常: {e}"}), 500
+
+    # ===== 保存为临时 docx =====
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_docx:
+        doc.save(tmp_docx.name)
+        tmp_docx_path = tmp_docx.name
+
+    # ===== 转换为 PDF =====
+    pdf_path = tmp_docx_path.replace(".docx", ".pdf")
+    sysplat = platform.system()
+    try:
+        if sysplat == "Linux":
+            ret = os.system(
+                f'libreoffice --headless --convert-to pdf "{tmp_docx_path}" --outdir "{os.path.dirname(tmp_docx_path)}"'
+            )
+            if ret != 0 or not os.path.exists(pdf_path):
+                return (
+                    jsonify(
+                        {"status": "fail", "msg": "PDF转换失败，libreoffice执行错误"}
+                    ),
+                    500,
+                )
+        elif sysplat in ["Darwin", "Windows"]:
+            try:
+                from docx2pdf import convert
+
+                convert(tmp_docx_path, pdf_path)
+            except Exception as e:
+                return jsonify({"status": "fail", "msg": f"docx2pdf转换失败: {e}"}), 500
+        else:
+            return (
+                jsonify({"status": "fail", "msg": f"不支持的系统类型: {sysplat}"}),
+                500,
+            )
+    except Exception as e:
+        return jsonify({"status": "fail", "msg": f"PDF转换失败: {e}"}), 500
+
+    # ===== 返回 PDF =====
+    return send_file(
+        pdf_path,
+        as_attachment=True,
+        download_name=(data["title"] or "培训记录") + "-培训记录.pdf",
     )
 
 
