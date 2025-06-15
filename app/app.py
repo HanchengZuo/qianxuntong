@@ -13,6 +13,7 @@ from utils.signer import insert_signatures_into_pdf
 import uuid
 import json
 import base64
+import re
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Text
 from datetime import datetime
@@ -173,6 +174,7 @@ class TrainingTask(db.Model):
     __tablename__ = "training_task"
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     title = db.Column(db.String(200))
     material_id = db.Column(db.Integer, db.ForeignKey("training_material.id"))
     description = db.Column(db.Text)
@@ -214,6 +216,7 @@ class TrainingRecord(db.Model):
     __tablename__ = "training_record"
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     task_id = db.Column(
         db.Integer, db.ForeignKey("training_task.id"), unique=True, nullable=False
     )  # 每个任务一条
@@ -366,8 +369,6 @@ def index():
         db.session.commit()
 
         # =========== 题库校验 =============
-        import re
-
         question_keys = [
             k
             for k in request.form.keys()
@@ -1188,6 +1189,7 @@ def create_training_task():
 
     # 1. 创建 TrainingTask
     task = TrainingTask(
+        user_id=current_user.id,
         title=title,
         material_id=material_id,
         description=description,
@@ -1216,7 +1218,7 @@ def create_training_task():
 @app.route("/training_task/<int:task_id>")
 @login_required
 def training_task_detail(task_id):
-    task = TrainingTask.query.filter_by(id=task_id).first()
+    task = TrainingTask.query.filter_by(id=task_id, user_id=current_user.id).first()
     if not task:
         return "未找到该培训任务", 404
 
@@ -1291,14 +1293,56 @@ def training_task_invite(task_id):
 
 # 员工答题主入口，支持提交、计分、历史记录
 @app.route("/training_answer/<int:task_id>/<int:employee_id>", methods=["GET", "POST"])
+@login_required
 def training_answer(task_id, employee_id):
+    # 1. 员工必须属于当前用户
+    employee = Employee.query.filter_by(id=employee_id, user_id=current_user.id).first()
+    if not employee:
+        return (
+            render_template(
+                "training_answer_disabled.html", msg="员工不存在或无权限。"
+            ),
+            403,
+        )
+
+    # 2. 任务必须属于当前用户
+    task = TrainingTask.query.filter_by(id=task_id, user_id=current_user.id).first()
+    if not task:
+        return (
+            render_template(
+                "training_answer_disabled.html", msg="培训任务不存在或无权限。"
+            ),
+            403,
+        )
+
+    # 3. 材料也要隔离
+    material = TrainingMaterial.query.filter_by(
+        id=task.material_id, user_id=current_user.id
+    ).first()
+    if not material:
+        return (
+            render_template(
+                "training_answer_disabled.html", msg="培训材料不存在或无权限。"
+            ),
+            403,
+        )
+
+    # 4. 参与记录查找
     tte = TrainingTaskEmployee.query.filter_by(
         task_id=task_id, employee_id=employee_id
     ).first()
-    task = TrainingTask.query.get(task_id)
-    material = TrainingMaterial.query.get(task.material_id)
-    employee = Employee.query.get(employee_id)
-    questions = TrainingQuestion.query.filter_by(material_id=material.id).all()
+    if not tte:
+        return (
+            render_template(
+                "training_answer_disabled.html", msg="未找到你的参与记录。"
+            ),
+            404,
+        )
+
+    # 5. 获取题库
+    questions = TrainingQuestion.query.filter_by(
+        material_id=material.id, user_id=current_user.id
+    ).all()
     parsed_questions = [
         {
             "id": q.id,
@@ -1308,15 +1352,15 @@ def training_answer(task_id, employee_id):
         }
         for q in questions
     ]
-    # 1. 判断整个任务是否已截止（只按截止日期）
+
+    # 6. 截止校验
     if task.deadline and datetime.now().date() > task.deadline:
         return render_template(
             "training_answer_disabled.html", msg="本次培训任务已截止，无法再答题。"
         )
 
-    # 2. 判断当前员工是否已完成
+    # 7. 是否已完成
     if tte.status == "已完成":
-        # 渲染成绩页面（可传成绩等信息）
         return render_template(
             "training_answer_disabled.html",
             msg="你已完成本次答题，无需重复提交。",
@@ -1326,7 +1370,6 @@ def training_answer(task_id, employee_id):
         )
 
     if request.method == "POST":
-        # 已通过，无需再提交
         if getattr(tte, "is_passed", False):
             return jsonify(
                 {
@@ -1337,9 +1380,7 @@ def training_answer(task_id, employee_id):
                     "max_attempts": task.max_attempts,
                 }
             )
-        # 已用完次数，不允许再提交
         if getattr(tte, "attempts", 0) >= task.max_attempts:
-            # 也要将状态置为已完成
             tte.status = "已完成"
             db.session.commit()
             return jsonify(
@@ -1352,7 +1393,6 @@ def training_answer(task_id, employee_id):
                 }
             )
 
-        # 允许本次提交
         answers = request.get_json()
         score = 0
         for q in parsed_questions:
@@ -1361,13 +1401,12 @@ def training_answer(task_id, employee_id):
             if ans in q["correct_answers"]:
                 score += 1
 
-        tte.attempts = (tte.attempts or 0) + 1  # 计数+1
+        tte.attempts = (tte.attempts or 0) + 1
         total = len(parsed_questions)
         correct_ratio = score / total if total else 0
         pass_score = getattr(task, "pass_score_ratio", 0.8)
         passed = correct_ratio >= pass_score
 
-        # 1. 保存本次答题历史
         history = TrainingAnswerHistory(
             task_id=task.id,
             employee_id=employee_id,
@@ -1378,12 +1417,10 @@ def training_answer(task_id, employee_id):
         )
         db.session.add(history)
 
-        # 2. 更新员工总表
         tte.score = score
         tte.submit_time = datetime.now()
         tte.is_passed = passed
 
-        # 达到最大次数，或通过，都算已完成
         if passed or tte.attempts >= task.max_attempts:
             tte.status = "已完成"
         else:
@@ -1391,7 +1428,6 @@ def training_answer(task_id, employee_id):
 
         db.session.commit()
 
-        # 3. 返回
         if not passed and tte.attempts >= task.max_attempts:
             return jsonify(
                 {
@@ -1442,17 +1478,31 @@ def training_answer(task_id, employee_id):
 
 # 答题前选择员工身份页
 @app.route("/training_answer_select/<int:task_id>", methods=["GET", "POST"])
+@login_required
 def training_answer_select(task_id):
-    task = TrainingTask.query.get(task_id)
-    # 找到所有参与该任务的员工
+    # 只允许当前用户自己的任务
+    task = TrainingTask.query.filter_by(id=task_id, user_id=current_user.id).first()
+    if not task:
+        return "未找到该培训任务或无权限", 404
+
+    # 只找自己员工
     records = TrainingTaskEmployee.query.filter_by(task_id=task_id).all()
     emp_ids = [rec.employee_id for rec in records]
-    employees = Employee.query.filter(Employee.id.in_(emp_ids)).all()
+
+    # 员工必须属于当前用户
+    employees = Employee.query.filter(
+        Employee.id.in_(emp_ids), Employee.user_id == current_user.id
+    ).all()
+
     if request.method == "POST":
-        employee_id = request.form.get("employee_id")
+        employee_id = int(request.form.get("employee_id"))
+        # 仅允许选自己的员工
+        if employee_id not in [e.id for e in employees]:
+            return "无效的员工选择", 403
         return redirect(
             url_for("training_answer", task_id=task_id, employee_id=employee_id)
         )
+
     return render_template(
         "training_answer_select.html", task=task, employees=employees
     )
@@ -1462,7 +1512,12 @@ def training_answer_select(task_id):
 @app.route("/training_stats")
 @login_required
 def training_stats():
-    tasks = TrainingTask.query.order_by(TrainingTask.created_at.desc()).all()
+    # 只查当前用户自己的任务
+    tasks = (
+        TrainingTask.query.filter_by(user_id=current_user.id)
+        .order_by(TrainingTask.created_at.desc())
+        .all()
+    )
 
     data = []
     for task in tasks:
@@ -1490,7 +1545,8 @@ def training_stats():
 @app.route("/delete_training_task/<int:task_id>", methods=["POST"])
 @login_required
 def delete_training_task(task_id):
-    task = TrainingTask.query.get(task_id)
+    # 只查当前用户自己的任务
+    task = TrainingTask.query.filter_by(id=task_id, user_id=current_user.id).first()
     if not task:
         return jsonify({"status": "not_found"}), 404
 
@@ -1508,23 +1564,21 @@ def delete_training_task(task_id):
 @app.route("/training_task/get/<int:task_id>")
 @login_required
 def training_task_get(task_id):
-    # 1. 获取培训任务对象
-    task = TrainingTask.query.get(task_id)
+    # 1. 只获取当前用户自己的任务
+    task = TrainingTask.query.filter_by(id=task_id, user_id=current_user.id).first()
     if not task:
         return jsonify({"status": "not_found"})
 
-    # 2. 获取培训材料
+    # 2. 获取培训材料（也做用户隔离更严谨，但最少做 task 隔离即可）
     material = TrainingMaterial.query.get(task.material_id)
-    # 3. 获取所有参与员工的任务关系
+    # 3. 只查本任务的参与员工
     ttes = TrainingTaskEmployee.query.filter_by(task_id=task_id).all()
     # 4. 批量获取员工对象
     employees = Employee.query.filter(
         Employee.id.in_([t.employee_id for t in ttes])
     ).all()
-    # 5. 建立员工id到对象的字典映射
     emp_map = {e.id: e for e in employees}
 
-    # 6. 统计数据（总人数、已完成人数、平均分、合格率）
     stats = {
         "total": len(ttes),
         "done": sum(1 for t in ttes if t.status == "已完成"),
@@ -1538,7 +1592,6 @@ def training_task_get(task_id):
         ),
     }
 
-    # 7. 返回结构化任务信息，包含基础字段、员工列表和统计数据
     return jsonify(
         {
             "status": "success",
@@ -1572,9 +1625,6 @@ def export_training_record():
 
     # 填充Word表格中的各字段
     table = doc.tables[0]
-    print("行数：", len(table.rows))
-    for i, row in enumerate(table.rows):
-        print(f"第{i}行 列数：{len(row.cells)}")
 
     try:
         table.cell(1, 1).text = data.get("station", "")
@@ -1583,6 +1633,45 @@ def export_training_record():
         table.cell(3, 3).text = data.get("time", "")
         table.cell(3, 6).text = data.get("trainer", "")
         table.cell(4, 3).text = data.get("employees", "")
+
+        # === 人数填充，run级别，不破坏格式 ===
+        try:
+            count = data.get("total")
+            if not count:
+                employees_str = data.get("employees", "")
+                names = [
+                    name.strip()
+                    for name in re.split(r"[、，,\s\n]+", employees_str)
+                    if name.strip()
+                ]
+                count = len(names)
+            else:
+                count = int(count)
+
+            cell = table.cell(5, 2)
+            para = cell.paragraphs[0]
+            runs = para.runs
+            found = False
+
+            for run in runs:
+                if run.text.strip() == "":
+                    run.text = str(count)
+                    found = True
+                    break
+            # 如果没有空run，则尝试用正则替换
+            if not found:
+                for run in runs:
+                    if "共" in run.text and "人" in run.text:
+                        run.text = re.sub(r"共\s*人", f"共 {count} 人", run.text)
+                        found = True
+                        break
+            # 如果还是不行，最后兜底（用cell.text，样式会丢失，但保证内容）
+            if not found:
+                txt = cell.text
+                cell.text = re.sub(r"共\s*人", f"共 {count} 人", txt)
+        except Exception as e:
+            print("人数填充异常", e)
+
         table.cell(6, 3).text = data.get("summary", "")
         table.cell(7, 3).text = data.get("result", "")
         table.cell(8, 3).text = data.get("note", "")
@@ -1641,12 +1730,13 @@ def export_training_record():
 def save_training_record():
     # 1. 获取表单数据
     data = request.get_json()
-    print("收到前端保存数据:", data)
     task_id = int(data.get("task_id"))
     # 2. 查询数据库有无历史记录，无则新建
-    record = TrainingRecord.query.filter_by(task_id=task_id).first()
+    record = TrainingRecord.query.filter_by(
+        task_id=task_id, user_id=current_user.id
+    ).first()
     if not record:
-        record = TrainingRecord(task_id=task_id)
+        record = TrainingRecord(task_id=task_id, user_id=current_user.id)
         db.session.add(record)
     # 3. 更新所有字段
     record.station = data.get("station", "")
@@ -1673,7 +1763,9 @@ def save_training_record():
 @app.route("/api/get_training_record/<int:task_id>", methods=["GET"])
 def get_training_record(task_id):
     # 1. 查询数据库
-    record = TrainingRecord.query.filter_by(task_id=task_id).first()
+    record = TrainingRecord.query.filter_by(
+        task_id=task_id, user_id=current_user.id
+    ).first()
     if not record:
         return jsonify({"status": "not_found"})
     # 2. 返回所有字段
