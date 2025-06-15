@@ -209,6 +209,30 @@ class TrainingAnswerHistory(db.Model):
     submit_time = db.Column(db.DateTime, default=datetime.now)
 
 
+# --- 培训任务制表（记录表） ---
+class TrainingRecord(db.Model):
+    __tablename__ = "training_record"
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(
+        db.Integer, db.ForeignKey("training_task.id"), unique=True, nullable=False
+    )  # 每个任务一条
+    station = db.Column(db.String(64))
+    title = db.Column(db.String(128))
+    time = db.Column(db.String(64))
+    place = db.Column(db.String(64))
+    trainer = db.Column(db.String(64))
+    employees = db.Column(db.Text)
+    summary = db.Column(db.Text)
+    result = db.Column(db.Text)
+    note = db.Column(db.Text)
+    date = db.Column(db.String(32))
+    review_date = db.Column(db.String(32))
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 # ===============================
 # 1. 登录/注册/用户体系（系统通用区）
 # ===============================
@@ -1484,17 +1508,23 @@ def delete_training_task(task_id):
 @app.route("/training_task/get/<int:task_id>")
 @login_required
 def training_task_get(task_id):
+    # 1. 获取培训任务对象
     task = TrainingTask.query.get(task_id)
     if not task:
         return jsonify({"status": "not_found"})
 
+    # 2. 获取培训材料
     material = TrainingMaterial.query.get(task.material_id)
+    # 3. 获取所有参与员工的任务关系
     ttes = TrainingTaskEmployee.query.filter_by(task_id=task_id).all()
+    # 4. 批量获取员工对象
     employees = Employee.query.filter(
         Employee.id.in_([t.employee_id for t in ttes])
     ).all()
+    # 5. 建立员工id到对象的字典映射
     emp_map = {e.id: e for e in employees}
 
+    # 6. 统计数据（总人数、已完成人数、平均分、合格率）
     stats = {
         "total": len(ttes),
         "done": sum(1 for t in ttes if t.status == "已完成"),
@@ -1508,6 +1538,7 @@ def training_task_get(task_id):
         ),
     }
 
+    # 7. 返回结构化任务信息，包含基础字段、员工列表和统计数据
     return jsonify(
         {
             "status": "success",
@@ -1528,64 +1559,50 @@ def training_task_get(task_id):
     )
 
 
+# 导出培训记录PDF（Word→PDF）
 @app.route("/api/export_training_record", methods=["POST"])
 def export_training_record():
+    # 获取表单前端发来的数据
     data = request.get_json()
+    # 定位Word模板
     template_path = os.path.join(
         app.root_path, "static", "training_records", "培训记录表.docx"
     )
     doc = Document(template_path)
 
-    # ===== 修改“站名”段落文字 =====
-    for para in doc.paragraphs:
-        if "站名" in para.text:
-            para.text = f"站名：{data.get('station','')}"
-            for run in para.runs:
-                run.font.name = "宋体"
-                run.font.size = Pt(12)
-            break
-
-    # 2. 填“填表/日期” & “审核日期”
-    for para in doc.paragraphs:
-        if para.text.strip().startswith("填表/日期"):
-            para.text = (
-                f"填表/日期：{data.get('date','')}\t\t\t\t\t\t\t"
-                f"审核日期：{data.get('reviewDate','')}"
-            )
-            for run in para.runs:
-                run.font.name = "宋体"
-                run.font.size = Pt(12)
-            break
-
-    # ===== 填充表格字段 =====
+    # 填充Word表格中的各字段
     table = doc.tables[0]
     print("行数：", len(table.rows))
     for i, row in enumerate(table.rows):
         print(f"第{i}行 列数：{len(row.cells)}")
 
     try:
-        table.cell(0, 1).text = data.get("title", "")
-        table.cell(0, 3).text = data.get("place", "")
-        table.cell(1, 1).text = data.get("time", "")
-        table.cell(1, 3).text = data.get("trainer", "")
-        table.cell(2, 1).text = data.get("employees", "")
-        table.cell(4, 1).text = data.get("summary", "")
-        table.cell(5, 1).text = data.get("result", "")
-        table.cell(6, 1).text = data.get("note", "")
+        table.cell(1, 1).text = data.get("station", "")
+        table.cell(2, 3).text = data.get("title", "")
+        table.cell(2, 6).text = data.get("place", "")
+        table.cell(3, 3).text = data.get("time", "")
+        table.cell(3, 6).text = data.get("trainer", "")
+        table.cell(4, 3).text = data.get("employees", "")
+        table.cell(6, 3).text = data.get("summary", "")
+        table.cell(7, 3).text = data.get("result", "")
+        table.cell(8, 3).text = data.get("note", "")
+        table.cell(9, 3).text = data.get("date", "")
+        table.cell(9, 6).text = data.get("reviewDate", "")
     except Exception as e:
         print("填表异常", e)
         return jsonify({"status": "fail", "msg": f"填表异常: {e}"}), 500
 
-    # ===== 保存为临时 docx =====
+    # 保存为临时docx文件
     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_docx:
         doc.save(tmp_docx.name)
         tmp_docx_path = tmp_docx.name
 
-    # ===== 转换为 PDF =====
+    # 转换为PDF，兼容不同操作系统
     pdf_path = tmp_docx_path.replace(".docx", ".pdf")
     sysplat = platform.system()
     try:
         if sysplat == "Linux":
+            # 用libreoffice转换
             ret = os.system(
                 f'libreoffice --headless --convert-to pdf "{tmp_docx_path}" --outdir "{os.path.dirname(tmp_docx_path)}"'
             )
@@ -1611,11 +1628,72 @@ def export_training_record():
     except Exception as e:
         return jsonify({"status": "fail", "msg": f"PDF转换失败: {e}"}), 500
 
-    # ===== 返回 PDF =====
+    # 返回PDF供前端下载
     return send_file(
         pdf_path,
         as_attachment=True,
         download_name=(data["title"] or "培训记录") + "-培训记录.pdf",
+    )
+
+
+# 保存培训记录表（持久化到数据库，覆盖同task_id旧数据）
+@app.route("/api/save_training_record", methods=["POST"])
+def save_training_record():
+    # 1. 获取表单数据
+    data = request.get_json()
+    print("收到前端保存数据:", data)
+    task_id = int(data.get("task_id"))
+    # 2. 查询数据库有无历史记录，无则新建
+    record = TrainingRecord.query.filter_by(task_id=task_id).first()
+    if not record:
+        record = TrainingRecord(task_id=task_id)
+        db.session.add(record)
+    # 3. 更新所有字段
+    record.station = data.get("station", "")
+    record.title = data.get("title", "")
+    record.time = data.get("time", "")
+    record.place = data.get("place", "")
+    record.trainer = data.get("trainer", "")
+    record.employees = data.get("employees", "")
+    record.summary = data.get("summary", "")
+    record.result = data.get("result", "")
+    record.note = data.get("note", "")
+    record.date = data.get("date", "")
+    record.review_date = data.get("review_date", "")
+    record.updated_at = datetime.utcnow()
+    try:
+        db.session.commit()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "fail", "msg": str(e)})
+
+
+# 获取某培训任务的记录表（用于前端弹窗自动回填）
+@app.route("/api/get_training_record/<int:task_id>", methods=["GET"])
+def get_training_record(task_id):
+    # 1. 查询数据库
+    record = TrainingRecord.query.filter_by(task_id=task_id).first()
+    if not record:
+        return jsonify({"status": "not_found"})
+    # 2. 返回所有字段
+    return jsonify(
+        {
+            "status": "success",
+            "record": {
+                "station": record.station or "",
+                "title": record.title or "",
+                "time": record.time or "",
+                "place": record.place or "",
+                "trainer": record.trainer or "",
+                "employees": record.employees or "",
+                "summary": record.summary or "",
+                "result": record.result or "",
+                "note": record.note or "",
+                "date": record.date or "",
+                "review_date": record.review_date or "",
+            },
+        }
     )
 
 
