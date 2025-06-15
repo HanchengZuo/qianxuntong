@@ -44,8 +44,12 @@ RUN fc-cache -fv
 # 拷贝项目文件
 COPY . .
 
+# 拷贝启动脚本并授权
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # 设置容器启动端口
 EXPOSE 5000
 
 # 启动命令
-CMD ["python", "app.py"]
+CMD ["/entrypoint.sh"]

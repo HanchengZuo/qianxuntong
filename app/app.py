@@ -33,6 +33,7 @@ import platform
 from flask import request, send_file, jsonify
 from docx import Document
 from docx.shared import Pt
+from flask_migrate import Migrate
 
 
 # ========== Flask app与数据库配置 ==========
@@ -48,7 +49,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
-
+migrate = Migrate(app, db)
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 os.makedirs(app.config["FINAL_FOLDER"], exist_ok=True)
 
