@@ -1,3 +1,17 @@
+# --- Flask-Migrate / Alembic 迁移目录 ---
+# 不忽略 migrations 文件夹和迁移脚本，**只忽略缓存/临时文件**
+
+# 不要忽略 migrations/
+!migrations/
+!migrations/versions/
+
+# 忽略 migrations 目录下的 pycache
+migrations/__pycache__/
+migrations/versions/__pycache__/
+
+# 如果你有 alembic.ini 配置（一般在根目录），建议也加入版本控制
+!alembic.ini
+
 # 忽略 static 文件夹下所有文件和子文件夹的文件
 app/static/*
 # 但不忽略 static 文件夹本身
