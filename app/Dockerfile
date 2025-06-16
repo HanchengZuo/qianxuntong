@@ -38,6 +38,9 @@ RUN if [ "$USE_MIRROR" = "true" ]; then \
 # 拷贝宋体字体
 COPY static/fonts/simsun.ttc /usr/share/fonts/windows/simsun.ttc
 
+# 拷贝所有字体文件（包括子目录），到容器的系统字体目录
+COPY static/fonts/ /usr/share/fonts/custom/
+
 # 刷新字体缓存
 RUN fc-cache -fv
 

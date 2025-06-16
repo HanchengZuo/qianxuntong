@@ -54,13 +54,16 @@
         <!-- 右侧主内容区 -->
         <div class="content">
 
-            <!-- 签名发布（上传PDF、配置签名和题库） -->
+            <!-- 签名发布（上传PDF/Word/图片，配置签名和题库） -->
             <div id="upload-section">
                 <div class="upload-box">
                     <h2>📩 上传新的待签名文件</h2>
                     <form action="/" method="post" enctype="multipart/form-data" id="uploadForm" target="_blank">
-                        <label for="pdfInput">选择 PDF 文件</label>
-                        <input type="file" name="pdf" id="pdfInput" accept=".pdf" required>
+                        <label for="fileInput">
+                            选择文件 <span style="color:#999;font-size:13px;">支持上传
+                                <b>PDF</b>、<b>Word</b>（.doc/.docx）、<b>图片</b>（JPG/PNG）</span>
+                        </label>
+                        <input type="file" name="file" id="fileInput" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required>
 
                         <label for="titleInput">文件标题</label>
                         <input type="text" name="title" id="titleInput" required>
@@ -217,7 +220,8 @@
                     <button id="uploadMaterialBtn" class="btn-add">
                         📤 上传材料
                     </button>
-                    <input type="file" id="hiddenMaterialFile" accept=".pdf" style="display:none;">
+                    <input type="file" id="hiddenMaterialFile" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                        style="display:none;">
                 </h3>
                 <table class="record-table">
                     <thead>

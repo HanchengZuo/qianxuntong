@@ -34,10 +34,16 @@ from flask import request, send_file, jsonify
 from docx import Document
 from docx.shared import Pt
 from flask_migrate import Migrate
-
+import shutil
+from PIL import Image
+from reportlab.pdfgen import canvas as pdf_canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader
+from docx2pdf import convert as docx2pdf_convert
 
 # ========== Flask app与数据库配置 ==========
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 限制为20MB
 app.config["SECRET_KEY"] = "very-secret-key-123456"
 app.config["UPLOAD_FOLDER"] = "static/uploads"
 app.config["FINAL_FOLDER"] = "static/final"
@@ -326,26 +332,72 @@ def delete_employee(id):
 @app.route("/", methods=["GET", "POST"])
 @login_required
 def index():
+    ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "jpg", "jpeg", "png"}
+
+    def allowed_file(filename):
+        return (
+            "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+        )
+
     if request.method == "POST":
         title = request.form.get("title", "").strip()
-        pdf_file = request.files.get("pdf")
+        file = request.files.get("file")
         employee_ids = [int(eid) for eid in request.form.getlist("employee_ids")]
         quiz_required = bool(request.form.get("quiz_required"))
 
-        if not title or not pdf_file or not pdf_file.filename.endswith(".pdf"):
-            return "请上传 PDF 文件并填写标题", 400
+        if not title or not file or not allowed_file(file.filename):
+            return "请上传 PDF/Word/图片文件并填写标题", 400
 
         if not employee_ids:
             return "请至少选择一个员工", 400
 
-        filename = secure_filename(pdf_file.filename)
+        ext = file.filename.rsplit(".", 1)[1].lower()
+        filename = secure_filename(file.filename)
         task_id = str(uuid.uuid4())
         user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(current_user.id))
         os.makedirs(user_folder, exist_ok=True)
-        save_path = os.path.join(user_folder, f"{task_id}_{filename}")
-        pdf_file.save(save_path)
 
-        # 创建签名任务记录
+        # 统一 PDF 存储路径
+        pdf_filename = f"{task_id}.pdf"
+        pdf_save_path = os.path.join(user_folder, pdf_filename)
+
+        # ===== 文件类型判断与转换 =====
+        if ext == "pdf":
+            file.save(pdf_save_path)
+        elif ext in {"doc", "docx"}:
+            # 保存 word 文件再转换
+            word_path = os.path.join(user_folder, f"{task_id}.{ext}")
+            file.save(word_path)
+            sysplat = platform.system()
+            try:
+                if sysplat == "Linux":
+                    os.system(
+                        f'libreoffice --headless --convert-to pdf "{word_path}" --outdir "{user_folder}"'
+                    )
+                    real_pdf_path = os.path.join(
+                        user_folder, filename.rsplit(".", 1)[0] + ".pdf"
+                    )
+                    # 尝试找转换后的 PDF，如果没找到直接用 task_id.pdf
+                    if os.path.exists(real_pdf_path):
+                        shutil.move(real_pdf_path, pdf_save_path)
+                    elif os.path.exists(word_path.replace(f".{ext}", ".pdf")):
+                        shutil.move(word_path.replace(f".{ext}", ".pdf"), pdf_save_path)
+                    else:
+                        return "Word转PDF失败（未生成PDF）", 500
+                else:
+                    docx2pdf_convert(word_path, pdf_save_path)
+            except Exception as e:
+                return f"Word转PDF失败: {e}", 500
+            os.remove(word_path)
+        elif ext in {"jpg", "jpeg", "png"}:
+            # 单图片转 PDF
+            img = Image.open(file.stream)
+            img = img.convert("RGB")
+            img.save(pdf_save_path, "PDF")
+        else:
+            return "不支持的文件类型", 400
+
+        # ====== 签名任务保存，PDF 参与后续流程 ======
         task = SignatureTask(
             user_id=current_user.id,
             task_id=task_id,
@@ -385,7 +437,6 @@ def index():
         for i in question_indexes:
             content = request.form.get(f"questions[{i}][content]", "").strip()
             if not content:
-                # 跳过未填写内容的题（通常是空白行）
                 continue
             options = request.form.getlist(f"questions[{i}][options][]")
             answer = request.form.get(f"questions[{i}][answers]")
@@ -992,27 +1043,85 @@ def quiz_page(task_id, employee_id):
 # ===============================
 # 5. 培训系统 —— 材料管理
 # ===============================
-# 上传材料API，存文件及记录
+# 上传材料API，存文件及记录（统一命名、规范化）
 @app.route("/training_materials", methods=["POST"])
 @login_required
 def training_materials():
     user_folder = os.path.join("static/training_materials", str(current_user.id))
     os.makedirs(user_folder, exist_ok=True)
-    title = request.form.get("title")
+    title = request.form.get("title", "").strip()
     desc = request.form.get("description", "")
     file = request.files.get("file")
-    if not (title and file and file.filename.endswith(".pdf")):
-        return jsonify({"status": "fail", "msg": "请上传PDF文件并填写标题"}), 200
-    filename = secure_filename(file.filename)
-    save_path = os.path.join(user_folder, filename)
-    file.save(save_path)
+
+    ALLOWED_EXTS = {"pdf", "doc", "docx", "jpg", "jpeg", "png"}
+
+    def allowed_file(filename):
+        return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTS
+
+    if not (title and file and allowed_file(file.filename)):
+        return (
+            jsonify({"status": "fail", "msg": "请上传PDF/Word/图片文件并填写标题"}),
+            200,
+        )
+
+    ext = file.filename.rsplit(".", 1)[1].lower()
+
+    # ========== 先插入材料表，获取唯一ID ==========
     mat = TrainingMaterial(
         user_id=current_user.id,
         title=title,
         description=desc,
-        file_path=os.path.join(str(current_user.id), filename),
+        file_path="",  # 先占位，后面补
     )
     db.session.add(mat)
+    db.session.flush()  # 不commit可以拿到mat.id
+
+    # ==== 规范文件名：{id}_{title}.pdf，过滤标题非法字符 ====
+    safe_title = "".join(
+        c for c in title if c.isalnum() or c in (" ", "_", "-", "（", "）")
+    )
+    if not safe_title:
+        safe_title = str(mat.id)
+    pdf_filename = f"{mat.id}_{safe_title}.pdf"
+    pdf_save_path = os.path.join(user_folder, pdf_filename)
+
+    try:
+        if ext == "pdf":
+            file.save(pdf_save_path)
+        elif ext in {"doc", "docx"}:
+            word_path = os.path.join(user_folder, f"{mat.id}_{safe_title}.{ext}")
+            file.save(word_path)
+            sysplat = platform.system()
+            if sysplat == "Linux":
+                os.system(
+                    f'libreoffice --headless --convert-to pdf "{word_path}" --outdir "{user_folder}"'
+                )
+                # 有时转换文件名不是你想要的，这里兜底全部.pdf只取最新
+                pdfs = sorted(
+                    [f for f in os.listdir(user_folder) if f.endswith(".pdf")],
+                    key=lambda fn: os.path.getmtime(os.path.join(user_folder, fn)),
+                    reverse=True,
+                )
+                if pdfs:
+                    shutil.move(os.path.join(user_folder, pdfs[0]), pdf_save_path)
+                else:
+                    return jsonify({"status": "fail", "msg": "Word转PDF失败"}), 500
+                os.remove(word_path)
+            else:
+                docx2pdf_convert(word_path, pdf_save_path)
+                os.remove(word_path)
+        elif ext in {"jpg", "jpeg", "png"}:
+            img = Image.open(file.stream)
+            img = img.convert("RGB")
+            img.save(pdf_save_path, "PDF")
+        else:
+            return jsonify({"status": "fail", "msg": "不支持的文件类型"}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "fail", "msg": f"文件转换出错：{e}"}), 500
+
+    # ========== 更新file_path为规范路径并提交 ==========
+    mat.file_path = os.path.join(str(current_user.id), pdf_filename)
     db.session.commit()
     return jsonify(
         {
