@@ -198,6 +198,8 @@
                         window.location.href = res.redirect;
                     } else {
                         $('#quiz-error').text(res.msg).show();
+                        window.scrollTo({ top: 0, behavior: 'smooth' }); // 滚到顶部
+                        $('input[type=radio]').prop('checked', false);   // 清空所有选项
                     }
                 },
                 error: function (xhr) {

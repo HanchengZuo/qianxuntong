@@ -277,8 +277,7 @@ h3 {
 
 .option-item {
     display: flex;
-    align-items: flex-end;
-    /* 关键：底部对齐 */
+    align-items: center;
     gap: 8px;
     margin-bottom: 8px;
     background: #fff;
@@ -286,8 +285,7 @@ h3 {
     border: 1px solid #eee;
     padding: 4px 8px;
     min-height: 40px;
-    height: 48px;
-    box-sizing: border-box;
+    /* 不设置height */
 }
 
 .option-item input[type="text"] {
@@ -308,20 +306,36 @@ h3 {
 }
 
 .correct-label {
-    display: flex;
+    display: flex !important;
     align-items: center;
     gap: 5px;
     font-size: 15px;
-    padding: 0 14px;
+    padding: 0 10px;
     background: #f4f8fd;
     border-radius: 6px;
     border: 1.5px solid #c5e0fa;
     color: #2573d6;
     white-space: nowrap;
-    height: 40px;
-    /* 统一高度 */
-    line-height: 40px;
+    height: 36px;
     box-sizing: border-box;
+    margin-top: 0px !important;
+    margin-bottom: 0px !important;
+}
+
+.correct-label input[type="radio"] {
+    margin: 0;
+    padding: 0;
+    width: 18px;
+    height: 18px;
+    align-self: center;
+}
+
+.correct-label span {
+    display: inline-block;
+    flex: 0 0 auto;
+    width: auto;
+    text-align: center;
+    line-height: 36px;
 }
 
 .correct-label input[type="checkbox"] {
@@ -333,14 +347,14 @@ h3 {
 }
 
 .option-item button {
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    max-width: 40px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    max-width: 36px;
     background: #faeaea;
     border: 1.5px solid #e74c3c;
     color: #e74c3c;
-    font-size: 22px;
+    font-size: 20px;
     border-radius: 6px;
     cursor: pointer;
     display: flex;
@@ -349,6 +363,7 @@ h3 {
     margin-left: 2px;
     box-sizing: border-box;
     padding: 0;
+    margin-top: 0px;
 }
 
 .option-item button:hover {
@@ -707,4 +722,46 @@ textarea:focus {
 #toastMsg {
     position: fixed;
     z-index: 9999 !important;
+}
+
+.option-item textarea {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    font-size: 15px;
+    border-radius: 5px;
+    padding: 6px 10px;
+    background: #fff;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+    min-height: 36px;
+    line-height: 1.5;
+    resize: vertical;
+    margin-bottom: 0;
+}
+
+#globalMask {
+    display: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.35);
+    z-index: 9999;
+    cursor: not-allowed;
+}
+
+#aiGenerateBtn {
+    background: #27ae60;
+    color: #fff;
+}
+
+#aiGenerateBtn:hover {
+    background-color: #1e8744;
+    /* 更深一点的绿色 */
+    color: #fff;
 }

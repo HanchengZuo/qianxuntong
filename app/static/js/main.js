@@ -59,68 +59,94 @@ function toggleQuizConfig() {
     configArea.style.display = checkbox.checked ? "block" : "none";
 
     if (checkbox.checked) {
-        // 如果还没有题目，则默认添加一个
+        // 如果还没有题目，则默认添加一个题目
         const container = document.getElementById("question-container");
         if (container.children.length === 0) {
-            addQuestion();
+            addQuestion();  // 确保添加题目
         }
         updateDeleteButtons();
     }
 }
 
-// --------- 2.3 答题题库配置（动态添加题目/选项/校验等） ---------
-// 添加选项（每个题块内）
-window.addOption = function (btn, qIndex) {
-    let questionDiv = btn.closest('.quiz-question-block');
-    let container = questionDiv.querySelector('.options-container');
-    let optIndex = container.children.length;
-    let div = document.createElement('div');
-    div.className = 'option-item';
-    div.style.marginBottom = '7px';
-    div.innerHTML = `
-        <input type="text" name="questions[${qIndex}][options][]" placeholder="请输入选项" required style="width:65%;">
-        <label>
-            <input type="radio" name="questions[${qIndex}][answers]" value="${optIndex}">
-            正确
-        </label>
-        <button type="button" onclick="this.parentElement.remove()">❌</button>
-    `;
-    container.appendChild(div);
-}
 
-// 题库配置：添加题目
+// --------- 2.3 答题题库配置（动态添加题目/选项/校验等） ---------
 let questionIndex = 0;
 window.addQuestion = function () {
     const container = document.getElementById("question-container");
-    const index = questionIndex++;
+    const index = questionIndex++; // 更新索引
 
     const div = document.createElement("div");
     div.className = "quiz-question-block";
+    div.id = "quiz-question-" + (index + 1);
     div.style = "margin-bottom:20px;padding:16px;border:1px solid #ddd;border-radius:8px;background:#f9f9f9;position:relative;";
 
     div.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <label class="question-title"><b>题目 X</b></label>
+            <label class="question-title"><b>题目 ${index + 1}</b></label>
             <span>
                 <button type="button" class="btn-add" onclick="addQuestion()">➕ 添加题目</button>
                 <button type="button" class="btn-delete" onclick="removeQuestion(this)">🗑 删除题目</button>
             </span>
         </div>
-        <input type="text" name="questions[${index}][content]" placeholder="请输入题干内容" required style="margin-bottom:10px;">
+        <textarea name="questions[${index}][content]" 
+                  placeholder="请输入题干内容" 
+                  required 
+                  style="width:100%;min-height:42px;resize:vertical;margin-bottom:10px;line-height:1.5;"></textarea>
         <label>选项</label>
         <div class="options-container"></div>
-        <button type="button" onclick="addOption(this, ${index})">➕ 添加选项</button>
+        <button type="button" onclick="addQuizOption(this, ${index})">➕ 添加选项</button>
     `;
-    container.appendChild(div);
+    container.appendChild(div); // 将新题目添加到题目容器中
 
     // 自动添加两个初始选项
-    const btn = div.querySelector("button[onclick^='addOption']");
-    addOption(btn, index);
-    addOption(btn, index);
+    const btn = div.querySelector("button[onclick^='addQuizOption']");
+    addQuizOption(btn, index);
+    addQuizOption(btn, index);
+    addQuizOption(btn, index);
+    addQuizOption(btn, index); // 默认添加四个选项
 
     updateDeleteButtons();
     refreshQuestionLabels();
 };
+
+window.addQuizOption = function (btn, qIndex) {
+    if (!btn) return;
+    let questionDiv = btn.closest('.quiz-question-block');
+    if (!questionDiv) return;
+    let container = questionDiv.querySelector('.options-container');
+    if (!container) return;
+    let optIndex = container.children.length;
+
+    // 关键：统一样式class，label加上.correct-label
+    let div = document.createElement('div');
+    div.className = 'option-item';
+    div.style.marginBottom = '7px';
+    div.innerHTML = `
+        <textarea 
+            name="questions[${qIndex}][options][]" 
+            class="option-textarea"
+            placeholder="请输入选项"
+            required
+            style="resize:vertical;line-height:1.5;min-height:32px;"
+        ></textarea>
+        <label class="correct-label">
+            <input type="radio" name="questions[${qIndex}][answers]" value="${optIndex}">
+            <span>正确</span>
+        </label>
+        <button type="button" class="delete-option-btn" onclick="this.parentElement.remove()">❌</button>
+    `;
+    container.appendChild(div);
+};
+
+
+document.addEventListener('input', function (e) {
+    if (e.target.tagName.toLowerCase() === 'textarea') {
+        e.target.style.height = 'auto'; // 重置
+        e.target.style.height = (e.target.scrollHeight) + 'px'; // 自适应
+    }
+});
+
+
 
 // 题库配置：删除题目
 window.removeQuestion = function (btn) {
@@ -182,7 +208,7 @@ document.getElementById('uploadForm').addEventListener('submit', function (e) {
         return false;
     }
     const allowedExt = /\.(pdf|doc|docx|jpg|jpeg|png)$/i;
-    const maxSize = 20 * 1024 * 1024;
+    const maxSize = 30 * 1024 * 1024;
     if (!allowedExt.test(fileInput.files[0].name)) {
         showToast('仅支持 PDF、Word、图片格式文件', true);
         fileInput.focus();
@@ -190,7 +216,7 @@ document.getElementById('uploadForm').addEventListener('submit', function (e) {
         return false;
     }
     if (fileInput.files[0].size > maxSize) {
-        showToast('文件太大，请上传20MB以内的文件', true);
+        showToast('文件太大，请上传30MB以内的文件', true);
         fileInput.value = '';
         fileInput.focus();
         e.preventDefault();
@@ -252,8 +278,8 @@ document.getElementById('uploadForm').addEventListener('submit', function (e) {
 // 文件大小前端实时校验
 document.getElementById('fileInput').addEventListener('change', function () {
     const file = this.files[0];
-    if (file && file.size > 20 * 1024 * 1024) {
-        showToast('文件太大，请上传20MB以内的文件', true);
+    if (file && file.size > 30 * 1024 * 1024) {
+        showToast('文件太大，请上传30MB以内的文件', true);
         this.value = '';
     }
 });
@@ -369,7 +395,7 @@ document.getElementById('hiddenMaterialFile').onchange = function (e) {
     const file = e.target.files[0];
     if (!file) return;
     const allowedExt = /\.(pdf|doc|docx|jpg|jpeg|png)$/i;
-    const maxSize = 20 * 1024 * 1024; // 20MB
+    const maxSize = 30 * 1024 * 1024; // 30MB
 
     if (!allowedExt.test(file.name)) {
         showToast('❌ 仅支持 PDF、Word、图片格式文件！', true);
@@ -532,7 +558,7 @@ function renderOptions(options, answerIndex) {
 }
 
 // 增加一个空选项（弹窗内用）
-window.addOption = function () {
+window.addBankOption = function () {
     const container = document.getElementById('optionContainer');
     const optionCount = container.children.length;
     const div = document.createElement('div');
@@ -914,62 +940,181 @@ function closeMsgModal() {
 
 // 显示操作提示（支持“成功/失败”两种颜色），自动消失
 // Show a toast notification (auto disappear, different color for success/failure)
-function showToast(msg, isError = false, duration = 1800) {
-    const ele = document.getElementById('toastMsg');
-    ele.textContent = msg;                                  // 设置提示内容
-    ele.style.background = isError ? '#e74c3c' : '#222';    // 失败红色，成功深色
-    ele.style.display = 'block';
-    ele.style.opacity = '1';
-
-    // 动画渐入渐出，自动隐藏
-    // Fade out after duration
-    clearTimeout(ele._hideTimer); // 清除旧的定时器，防止叠加
-    ele._hideTimer = setTimeout(() => {
-        ele.style.opacity = '0'; // 渐隐
-        // 渐隐动画后隐藏
+function showToast(msg, isErr = false, isLoading = false) {
+    const t = document.getElementById('toastMsg');
+    if (!t) return;
+    t.textContent = msg;
+    t.style.background = isErr ? "#e74c3c" : "#222";
+    t.style.opacity = 1;
+    t.style.display = "block";
+    // 如果是loading，不自动消失
+    if (!isLoading) {
         setTimeout(() => {
-            ele.style.display = 'none';
-        }, 300);
-    }, duration);
+            t.style.opacity = 0;
+            setTimeout(() => t.style.display = "none", 300);
+        }, 2500);
+    }
 }
+
+function hideToast() {
+    const t = document.getElementById('toastMsg');
+    if (t) {
+        t.style.opacity = 0;
+        setTimeout(() => t.style.display = "none", 300);
+    }
+}
+
+function lockPage() {
+    // 显示蒙层，禁用AI弹窗关闭和生成按钮
+    document.getElementById('globalMask').style.display = 'block';
+    const aiGenBtn = document.getElementById('aiGenerateBtn');
+    if (aiGenBtn) aiGenBtn.disabled = true;
+    // 禁用关闭
+    const closeBtn = document.querySelector('#aiGenerateModal span[onclick*="hideAIGenerateModal"]');
+    if (closeBtn) closeBtn.style.pointerEvents = "none";
+}
+function unlockPage() {
+    document.getElementById('globalMask').style.display = 'none';
+    const aiGenBtn = document.getElementById('aiGenerateBtn');
+    if (aiGenBtn) aiGenBtn.disabled = false;
+    const closeBtn = document.querySelector('#aiGenerateModal span[onclick*="hideAIGenerateModal"]');
+    if (closeBtn) closeBtn.style.pointerEvents = "";
+}
+
+
+// ==========================
+// 10. 签名发布区域的AI生成题目
+// ==========================
 
 function openAIGenerateModal() {
     document.getElementById('aiGenerateModal').style.display = 'block';
-    document.getElementById('aiPdfTextPreview').style.display = 'none';
-    document.getElementById('aiPdfTextPreview').textContent = '';
-    // document.getElementById('aiQuestionDesc').value = ''; // 可以也清空输入
+    // 重置loading和错误提示
+    document.getElementById('aiGenLoading').style.display = 'none';
+    document.getElementById('aiGenError').style.display = 'none';
 }
 function hideAIGenerateModal() {
     document.getElementById('aiGenerateModal').style.display = 'none';
 }
 
-// 提交AI生成题目
+
+// 真正的AI生成题目提交
 function submitAIGenerate() {
-    // 获取上传的文件
     const fileInput = document.getElementById('fileInput');
     const file = fileInput.files[0];
     if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
         showToast('请先选择一个PDF文件', true);
         return;
     }
+    // 参数收集
+    const count = document.getElementById('aiQCount').value || 1;
+    const level = document.getElementById('aiQLevel').value || 'easy';
 
-    showToast('正在提取PDF文字…');
+    // ===== 加锁与提示 =====
+    showToast('正在生成题目，请稍候…', false, true);
+    lockPage();
+
+    document.getElementById('aiGenLoading').style.display = 'block';
+    document.getElementById('aiGenError').style.display = 'none';
+
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('count', count);
+    formData.append('level', level);
 
-    fetch('/api/pdf2text', {
+    fetch('/api/ai_generate_questions', {
         method: 'POST',
         body: formData
     }).then(r => r.json()).then(res => {
-        if (res.status === 'success') {
-            // 显示OCR文本内容到弹窗
-            const preview = document.getElementById('aiPdfTextPreview');
-            preview.textContent = res.text;
-            preview.style.display = 'block';
-            showToast('提取成功');
-        } else {
-            showToast(res.msg || 'PDF文字提取失败', true);
-        }
-    }).catch(() => showToast('PDF提取服务异常', true));
-}
+        document.getElementById('aiGenLoading').style.display = 'none';
+        unlockPage();
+        hideToast(); // 立即消失loading提示
 
+        if (res.status === 'success') {
+            const container = document.getElementById("question-container");
+            const newQuestions = res.questions || [];
+            let quizBlocks = container.querySelectorAll('.quiz-question-block');
+            let aiFillIndex = 0;
+
+            // 优先复用“第一个空白题块”
+            if (quizBlocks.length > 0) {
+                let firstBlock = quizBlocks[0];
+                let contentTextarea = firstBlock.querySelector('textarea[name$="[content]"]');
+                let optionTextareas = firstBlock.querySelectorAll('textarea[name^="questions"][name$="[options][]"]');
+                let allEmpty = (!contentTextarea.value.trim()) && Array.from(optionTextareas).every(o => !o.value.trim());
+
+                if (allEmpty && newQuestions.length > 0) {
+                    // 填充AI生成的第一题到第一个空白题
+                    contentTextarea.value = newQuestions[0].content;
+                    // 清空默认选项
+                    let optionsContainer = firstBlock.querySelector('.options-container');
+                    optionsContainer.innerHTML = '';
+                    let options = newQuestions[0].options || [];
+                    let answer = typeof newQuestions[0].answer === "number" ? newQuestions[0].answer : 0;
+                    options.forEach((opt, oi) => {
+                        let btn = firstBlock.querySelector('button[onclick^="addQuizOption"]');
+                        addQuizOption(btn, 0); // 题号用0
+                        let optTextareas = firstBlock.querySelectorAll('textarea[name^="questions"][name$="[options][]"]');
+                        if (optTextareas[oi]) optTextareas[oi].value = opt;
+                        let radios = firstBlock.querySelectorAll('input[type="radio"]');
+                        if (oi == answer && radios[oi]) radios[oi].checked = true;
+                    });
+                    aiFillIndex = 1;
+                }
+            }
+
+            // 其余题目都直接 addQuestion
+            for (let qi = aiFillIndex; qi < newQuestions.length; qi++) {
+                addQuestion();
+                let block = container.lastChild;
+                block.querySelector('textarea[name$="[content]"]').value = newQuestions[qi].content;
+                let options = newQuestions[qi].options || [];
+                let answer = typeof newQuestions[qi].answer === "number" ? newQuestions[qi].answer : 0;
+                block.querySelector('.options-container').innerHTML = '';
+                options.forEach((opt, oi) => {
+                    let btn = block.querySelector('button[onclick^="addQuizOption"]');
+                    addQuizOption(btn, questionIndex - 1); // 用最新的题号
+                    let optTextareas = block.querySelectorAll('textarea[name^="questions"][name$="[options][]"]');
+                    if (optTextareas[oi]) optTextareas[oi].value = opt;
+                    let radios = block.querySelectorAll('input[type="radio"]');
+                    if (oi == answer && radios[oi]) radios[oi].checked = true;
+                });
+            }
+
+            hideAIGenerateModal();
+            // === 新增：滚动到题库配置第1题 ===
+            setTimeout(function () {
+                const q1 = document.getElementById('quiz-question-1');
+                if (q1) q1.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 100);  // 等DOM渲染完再滚动
+            showToast('AI题目生成成功');
+        } else {
+            let msg = res.msg || 'AI生成失败';
+            // 针对常见错误码定制友好提示
+            if (res.code == 401) {
+                msg = 'API认证失败，请检查API Key设置。';
+            } else if (res.code == 402) {
+                msg = 'API账户余额不足，请充值后重试。';
+            } else if (res.code == 422) {
+                msg = '参数错误，请联系管理员检查配置。';
+            } else if (res.code == 429) {
+                msg = '请求过于频繁，请稍后再试。';
+            } else if (res.code == 500) {
+                msg = 'AI服务器故障，请稍后再试。';
+            } else if (res.code == 503) {
+                msg = 'AI服务繁忙，请等待片刻后重试。';
+            }
+            // 弹窗+toast都给到
+            document.getElementById('aiGenError').style.display = 'block';
+            document.getElementById('aiGenError').textContent = msg;
+            showToast(msg, true);
+        }
+    }).catch((err) => {
+        document.getElementById('aiGenLoading').style.display = 'none';
+        unlockPage();
+        hideToast();
+        const errMsg = 'AI服务异常: ' + err;
+        document.getElementById('aiGenError').style.display = 'block';
+        document.getElementById('aiGenError').textContent = errMsg;
+        showToast(errMsg, true);
+    });
+}

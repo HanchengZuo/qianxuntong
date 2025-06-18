@@ -7,7 +7,7 @@ ARG USE_MIRROR=true
 # 设置工作目录
 WORKDIR /app
 
-# 替换 apt 源为清华源（国内最快最全），USE_MIRROR 控制是否替换
+# 国内镜像加速，依赖安装
 RUN if [ "$USE_MIRROR" = "true" ]; then \
     sed -i 's|http://deb.debian.org|https://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list && \
     sed -i 's|http://security.debian.org|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' /etc/apt/sources.list ; \
@@ -18,9 +18,17 @@ RUN if [ "$USE_MIRROR" = "true" ]; then \
     fonts-noto-cjk \
     fonts-wqy-zenhei \
     fonts-arphic-uming \
-    fonts-arphic-ukai && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    fonts-arphic-ukai \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-chi-sim \
+    tesseract-ocr-eng \
+    curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# 时区设置（可选）
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # 拷贝 Python 依赖清单
 COPY requirements.txt ./

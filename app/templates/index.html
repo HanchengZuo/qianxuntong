@@ -91,11 +91,70 @@
 
                         <div id="quizConfigArea" style="display: none; margin-top: 20px;">
                             <label>🧠 题库配置（选择题，仅支持单选）</label>
+                            <div style="margin-bottom:20px;">
+                                <button type="button" class="btn-add" id="aiGenerateBtn"
+                                    onclick="openAIGenerateModal()">🤖
+                                    AI一键生成题目</button>
+                            </div>
                             <div id="question-container"></div>
                         </div>
 
                         <button type="submit">📩 上传并配置签名区域</button>
                     </form>
+                </div>
+            </div>
+
+            <div id="aiGenerateModal"
+                style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:#0006;">
+                <div style="
+                    background:#fff;
+                    border-radius:10px;
+                    max-width:480px;
+                    min-width:340px;
+                    margin:90px auto 0 auto;
+                    position:relative;
+                    box-shadow:0 8px 32px #0003;
+                    padding:32px 24px 24px 24px;">
+                    <!-- 关闭按钮 -->
+                    <span style="position:absolute;right:18px;top:16px;cursor:pointer;font-size:20px;"
+                        onclick="hideAIGenerateModal()">✖️</span>
+                    <h2 style="margin-bottom:20px;">AI一键生成题目</h2>
+                    <div style="margin-bottom:18px;">
+                        <label style="color:#888;margin-right:10px;">题型</label>
+                        <span
+                            style="background:#eee;padding:4px 14px;border-radius:16px;color:#999;opacity:0.8;user-select:none;">
+                            单选题（锁定）
+                        </span>
+                    </div>
+                    <div style="margin-bottom:18px;">
+                        <label for="aiQCount" style="margin-right:12px;">题目数量</label>
+                        <select id="aiQCount" style="padding:4px 12px;">
+                            <option value="1">1题</option>
+                            <option value="2">2题</option>
+                            <option value="3" selected>3题</option>
+                            <option value="4">4题</option>
+                            <option value="5">5题</option>
+                            <option value="6">6题</option>
+                            <option value="7">7题</option>
+                            <option value="8">8题（有概率生成失败）</option>
+                            <option value="9">9题（有概率生成失败）</option>
+                            <option value="10">10题（有概率生成失败）</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom:18px;">
+                        <label for="aiQLevel" style="margin-right:12px;">难度</label>
+                        <select id="aiQLevel" style="padding:4px 12px;">
+                            <option value="easy" selected>基础理解</option>
+                            <option value="deep">深度理解</option>
+                        </select>
+                    </div>
+                    <button class="btn-add" id="aiGenerateBtn" style="width:100%;margin-top:18px;font-size:16px;"
+                        onclick="submitAIGenerate()">🤖 生成题目</button>
+                    <div id="aiGenLoading"
+                        style="display:none;text-align:center;color:#888;margin-top:18px;font-size:14px;">
+                        <span>正在生成题目，请稍候…</span>
+                    </div>
+                    <div id="aiGenError" style="display:none;text-align:center;color:#e74c3c;margin-top:16px;"></div>
                 </div>
             </div>
 
@@ -287,7 +346,8 @@
                                 style="margin-bottom:10px;">
                             <label>选项</label>
                             <div id="optionContainer"></div>
-                            <button type="button" class="btn-add" onclick="addOption()" style="margin-bottom:10px;">➕
+                            <button type="button" class="btn-add" onclick="addBankOption()"
+                                style="margin-bottom:10px;">➕
                                 添加选项</button>
                             <div style="margin-top:15px;text-align:right;">
                                 <button type="submit" class="btn-add">💾 保存</button>
@@ -413,6 +473,8 @@
         opacity:0;
         transition:opacity 0.3s;
     "></div>
+
+    <div id="globalMask"></div>
 
     <!-- 各类 JS 脚本（jspdf/html2canvas导出PDF，主交互逻辑main.js） -->
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>

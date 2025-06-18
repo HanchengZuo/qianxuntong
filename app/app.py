@@ -40,10 +40,15 @@ from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from docx2pdf import convert as docx2pdf_convert
+import fitz  # PyMuPDF
+import pdfplumber
+from pdf2image import convert_from_path
+import pytesseract
+from openai import OpenAI
 
 # ========== Flask app与数据库配置 ==========
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 限制为20MB
+app.config["MAX_CONTENT_LENGTH"] = 30 * 1024 * 1024  # 限制为30MB
 app.config["SECRET_KEY"] = "very-secret-key-123456"
 app.config["UPLOAD_FOLDER"] = "static/uploads"
 app.config["FINAL_FOLDER"] = "static/final"
@@ -957,6 +962,197 @@ def sign_page_employee(task_id, employee_id):
         quiz_required=task.quiz_required,
         quiz_passed=quiz_passed,
     )
+
+
+def extract_text_from_pdf(pdf_path):
+    """
+    从PDF文件中提取文本，优先使用电子文本方式，最后使用OCR兜底。
+    支持中文和英文PDF自动识别。
+    """
+    # 第一优先：用 PyMuPDF 直接读取PDF文本（适合电子PDF）
+    try:
+        doc = fitz.open(pdf_path)
+        text = ""
+        for page in doc:
+            text += page.get_text()
+        doc.close()
+        # 提取到较多文本则直接返回
+        if len(text.strip()) > 30:
+            return text
+    except Exception:
+        pass
+
+    # 第二优先：用 pdfplumber 尝试读取文本
+    try:
+        text = ""
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                text += page.extract_text() or ""
+        if len(text.strip()) > 30:
+            return text
+    except Exception:
+        pass
+
+    # 最后兜底：PDF转图片后用OCR识别，适合扫描件/图片型PDF
+    try:
+        images = convert_from_path(pdf_path)
+        text = ""
+        for img in images:
+            text += pytesseract.image_to_string(img, lang="chi_sim+eng") + "\n"
+        return text
+    except Exception:
+        return ""
+
+
+@app.route("/api/pdf2text", methods=["POST"])
+def pdf2text():
+    """
+    接收前端上传的PDF文件，提取出可识别的文本内容（最多3万字），返回json。
+    """
+    if "file" not in request.files:
+        return jsonify({"status": "fail", "msg": "未上传文件"}), 400
+    file = request.files["file"]
+    if not file.filename.lower().endswith(".pdf"):
+        return jsonify({"status": "fail", "msg": "请上传PDF文件"}), 400
+
+    # 文件临时保存路径
+    save_path = os.path.join("/tmp", file.filename)
+    file.save(save_path)
+
+    # 提取文本
+    text = extract_text_from_pdf(save_path)
+    os.remove(save_path)
+
+    # 未识别出有效文本
+    if not text.strip():
+        return jsonify({"status": "fail", "msg": "未能识别出文本"}), 200
+
+    # 成功返回，文本过长则截断3万字
+    return jsonify({"status": "success", "text": text[:30000]})
+
+
+DEEPSEEK_KEY = "sk-6a104b306d4d41378825c18da83b0e6b"
+client = OpenAI(api_key=DEEPSEEK_KEY, base_url="https://api.deepseek.com")
+
+
+# 后端API：POST /api/ai_generate_questions
+@app.route("/api/ai_generate_questions", methods=["POST"])
+def ai_generate_questions():
+    # 获取参数
+    count = int(request.form.get("count", 1))
+    level = request.form.get("level", "基础理解")
+    file = request.files.get("file")
+
+    if not file or not file.filename.lower().endswith(".pdf"):
+        return jsonify({"status": "fail", "msg": "请上传PDF文件"}), 400
+
+    # 1. 提取pdf文本
+    save_path = os.path.join("/tmp", file.filename)
+    file.save(save_path)
+
+    pdf_text = extract_text_from_pdf(save_path)
+    os.remove(save_path)
+
+    if not pdf_text or len(pdf_text.strip()) < 40:
+        return jsonify({"status": "fail", "msg": "PDF文本内容过少"}), 200
+
+    # 2. 拼接prompt
+    prompt = f"""
+        请根据以下文档内容，自动生成{count}道选择题。所有题型为“单选题”。难度控制为“{level}”。
+        要求输出严格如下格式的JSON列表（不要输出其他内容）：
+        [
+        {{
+            "content": "题干内容",
+            "options": ["A选项", "B选项", ...],
+            "answer": 0
+        }}
+        ]
+        文档内容如下：
+        -----------------
+        {pdf_text[:5000]}   # 控制最大长度，防止超长token
+        -----------------
+        """
+
+    # 3. 调用deepseek
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "你是一个擅长出题的老师，请按要求输出JSON。",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=6000,  # 可调整
+            temperature=1.0,
+            stream=False,
+        )
+        output = response.choices[0].message.content.strip()
+
+        # 4. 尝试解析JSON
+        start = output.find("[")
+        end = output.rfind("]")
+
+        if start == -1 or end == -1:
+            raise ValueError("AI未输出合法JSON")
+        json_str = output[start : end + 1]
+        questions = json.loads(json_str)
+
+        # 兼容: 答案字段名如果是answer/正确/idx等，做一次映射
+        for q in questions:
+            if "correct" in q:
+                q["answer"] = q["correct"]
+            if "正确" in q:
+                q["answer"] = q["正确"]
+        return jsonify({"status": "success", "questions": questions})
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+
+        # 尝试获取 DeepSeek API 的 http 错误码（如有）
+        code = 500  # 默认500（服务器错误）
+        msg = f"AI生成题目失败: {str(e)}"
+
+        # 通用OpenAI/DeepSeek异常格式处理（假如 SDK 抛带 http_status/code 的异常）
+        if hasattr(e, "status_code"):
+            code = e.status_code
+        elif hasattr(e, "http_status"):
+            code = e.http_status
+        # openai库 可能有error属性
+        elif hasattr(e, "error") and hasattr(e.error, "code"):
+            code = e.error.code
+        # requests HTTPError
+        elif hasattr(e, "response") and hasattr(e.response, "status_code"):
+            code = e.response.status_code
+        # DeepSeek有的报错可能直接是数字
+        elif isinstance(e, int):
+            code = e
+
+        # 细化文案
+        if code == 401:
+            msg = "API认证失败，请检查API Key设置。"
+        elif code == 402:
+            msg = "API账户余额不足，请充值后重试。"
+        elif code == 422:
+            msg = "参数错误，请联系管理员检查配置。"
+        elif code == 429:
+            msg = "请求过于频繁，请稍后再试。"
+        elif code == 500:
+            msg = "AI服务器故障，请稍后再试。"
+        elif code == 503:
+            msg = "AI服务繁忙，请等待片刻后重试。"
+
+        # 有时 DeepSeek 返回内容在异常内容里（字符串）
+        if "余额不足" in str(e):
+            code = 402
+            msg = "API账户余额不足，请充值后重试。"
+        elif "认证失败" in str(e):
+            code = 401
+            msg = "API认证失败，请检查API Key设置。"
+
+        return jsonify({"status": "fail", "msg": msg, "code": code}), 200
 
 
 # ===============================

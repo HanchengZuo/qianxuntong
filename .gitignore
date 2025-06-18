@@ -12,10 +12,25 @@ migrations/versions/__pycache__/
 # 如果你有 alembic.ini 配置（一般在根目录），建议也加入版本控制
 !alembic.ini
 
-# 忽略 static 文件夹下所有文件和子文件夹的文件
-app/static/*
-# 但不忽略 static 文件夹本身
-!app/static/.gitkeep
+# 忽略所有 uploads 和 final 里的内容（只保留空目录）
+app/static/uploads/*
+!app/static/uploads/.gitkeep
+
+app/static/final/*
+!app/static/final/.gitkeep
+
+# 保留 css、js、fonts、trainingrecords 这些资源
+!app/static/css/
+!app/static/js/
+!app/static/fonts/
+!app/static/trainingrecords/
+
+# 先忽略所有 training_materials 下的内容
+app/static/training_materials/*
+
+# 但保留 .gitkeep（你可以把这个文件手动加进去，占位用）
+!app/static/training_materials/.gitkeep
+
 
 # 保留每个子文件夹，但忽略其内容
 app/static/final/
