@@ -165,7 +165,7 @@
                     <thead>
                         <tr>
                             <th>序号</th>
-                            <th>ID</th>
+                            <th class="hidden-column">ID</th>
                             <th>标题</th>
                             <th>创建时间</th>
                             <th>签名进度</th>
@@ -176,7 +176,7 @@
                         {% for task in tasks %}
                         <tr>
                             <td>{{ loop.index }}</td>
-                            <td>{{ task.id }}</td>
+                            <td class="hidden-column">${task.id}</td>
                             <td>{{ task.title }}</td>
                             <td>{{ task.created_at }}</td>
                             <td>
@@ -286,7 +286,7 @@
                     <thead>
                         <tr>
                             <th>序号</th>
-                            <th>ID</th>
+                            <th class="hidden-column">ID</th>
                             <th>标题</th>
                             <th>上传时间</th>
                             <th>操作</th>
@@ -296,6 +296,13 @@
                         <!-- JS 动态插入材料行 -->
                     </tbody>
                 </table>
+            </div>
+            <!-- 新的查看文本弹窗 -->
+            <div id="textModal" class="modal-mask" style="display:none;">
+                <div class="modal-content">
+                    <div id="textModalContent" style="max-height: 400px; overflow-y: auto; padding: 20px;"></div>
+                    <button onclick="closeTextModal()">关闭</button>
+                </div>
             </div>
 
             <!-- 培训题库管理（按材料管理选择题，支持弹窗新建/编辑） -->
@@ -309,24 +316,30 @@
                         </select>
                     </div>
                     <button class="btn-add" onclick="showQuestionModal()">➕ 新建题目</button>
+                    <button class="btn-add" id="aiGenerateQBankBtn" style="margin-right:10px;"
+                        onclick="openAIGenerateQBankModal()">🤖 AI一键生成题目</button>
                 </div>
-                <table class="record-table">
-                    <thead>
-                        <tr>
-                            <th>序号</th>
-                            <th>ID</th>
-                            <th>题干</th>
-                            <th>类型</th>
-                            <th>选项</th>
-                            <th>答案</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="questionTableBody">
-                        <!-- JS动态渲染 -->
-                    </tbody>
-                </table>
+                <!-- 新增横向滚动包裹层 -->
+                <div class="table-scroll-x">
+                    <table class="record-table">
+                        <thead>
+                            <tr>
+                                <th>序号</th>
+                                <th class="hidden-column">ID</th>
+                                <th>题干</th>
+                                <th>类型</th>
+                                <th>选项</th>
+                                <th>答案</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="questionTableBody">
+                            <!-- JS动态渲染 -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
             <!-- 题库题目新增/编辑弹窗 -->
             <div id="questionModal"
                 style="display:none;position:fixed;z-index:9;top:0;left:0;width:100vw;height:100vh;background:#0002;">
@@ -357,6 +370,61 @@
                 </div>
             </div>
 
+            <!-- 新增 AI生成题目弹窗 for 培训题库（和签名发布分开）-->
+            <div id="aiGenerateQBankModal"
+                style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:#0006;">
+                <div style="
+                    background:#fff;
+                    border-radius:10px;
+                    max-width:480px;
+                    min-width:340px;
+                    margin:90px auto 0 auto;
+                    position:relative;
+                    box-shadow:0 8px 32px #0003;
+                    padding:32px 24px 24px 24px;">
+                    <span style="position:absolute;right:18px;top:16px;cursor:pointer;font-size:20px;"
+                        onclick="hideAIGenerateQBankModal()">✖️</span>
+                    <h2 style="margin-bottom:20px;">AI一键生成题目</h2>
+                    <div style="margin-bottom:18px;">
+                        <label for="aiQBankType" style="margin-right:12px;">题型</label>
+                        <select id="aiQBankType" style="padding:4px 12px;">
+                            <option value="single" selected>单选题</option>
+                            <option value="judge">判断题</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom:18px;">
+                        <label for="aiQBankCount" style="margin-right:12px;">题目数量</label>
+                        <select id="aiQBankCount" style="padding:4px 12px;">
+                            <option value="1">1题</option>
+                            <option value="2">2题</option>
+                            <option value="3">3题</option>
+                            <option value="4">4题</option>
+                            <option value="5">5题</option>
+                            <option value="6">6题</option>
+                            <option value="7">7题</option>
+                            <option value="8">8题</option>
+                            <option value="9">9题</option>
+                            <option value="10" selected>10题</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom:18px;">
+                        <label for="aiQBankLevel" style="margin-right:12px;">难度</label>
+                        <select id="aiQBankLevel" style="padding:4px 12px;">
+                            <option value="easy" selected>基础理解</option>
+                            <option value="deep">进阶提升</option>
+                        </select>
+                    </div>
+                    <button class="btn-add" id="aiGenerateQBankBtn2" style="width:100%;margin-top:18px;font-size:16px;"
+                        onclick="submitAIGenerateQBank()">🤖 生成题目</button>
+                    <div id="aiGenQBankLoading"
+                        style="display:none;text-align:center;color:#888;margin-top:18px;font-size:14px;">
+                        <span>正在生成题目，请稍候…</span>
+                    </div>
+                    <div id="aiGenQBankError" style="display:none;text-align:center;color:#e74c3c;margin-top:16px;">
+                    </div>
+                </div>
+            </div>
+
             <!-- 培训记录统计与查看（所有历史培训任务及进度） -->
             <div id="training-stats-section" style="display:none;">
                 <h3>📊 培训任务记录</h3>
@@ -364,7 +432,7 @@
                     <thead>
                         <tr>
                             <th>序号</th>
-                            <th>ID</th>
+                            <th class="hidden-column">ID</th>
                             <th>标题</th>
                             <th>材料</th>
                             <th>发布时间</th>

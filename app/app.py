@@ -45,6 +45,8 @@ import pdfplumber
 from pdf2image import convert_from_path
 import pytesseract
 from openai import OpenAI
+import hashlib
+
 
 # ========== Flask app与数据库配置 ==========
 app = Flask(__name__)
@@ -163,7 +165,9 @@ class TrainingMaterial(db.Model):
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
     file_path = db.Column(db.String(255), nullable=False)
+    md5 = db.Column(db.String(32), unique=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    text_content = db.Column(db.Text)
 
 
 # --- 培训题库表 ---
@@ -970,16 +974,20 @@ def extract_text_from_pdf(pdf_path):
     支持中文和英文PDF自动识别。
     """
     # 第一优先：用 PyMuPDF 直接读取PDF文本（适合电子PDF）
+    print(f"[DEBUG] 开始解析PDF：{pdf_path}")
     try:
         doc = fitz.open(pdf_path)
         text = ""
         for page in doc:
             text += page.get_text()
         doc.close()
+        print(f"[DEBUG] PyMuPDF 提取文本长度: {len(text)}")
         # 提取到较多文本则直接返回
         if len(text.strip()) > 30:
+            print("[DEBUG] PyMuPDF 提取成功")
             return text
     except Exception:
+        print(f"[DEBUG] PyMuPDF 解析异常: {e}")
         pass
 
     # 第二优先：用 pdfplumber 尝试读取文本
@@ -988,9 +996,12 @@ def extract_text_from_pdf(pdf_path):
         with pdfplumber.open(pdf_path) as pdf:
             for page in pdf.pages:
                 text += page.extract_text() or ""
+        print(f"[DEBUG] pdfplumber 提取文本长度: {len(text)}")
         if len(text.strip()) > 30:
+            print("[DEBUG] pdfplumber 提取成功")
             return text
     except Exception:
+        print(f"[DEBUG] pdfplumber 解析异常: {e}")
         pass
 
     # 最后兜底：PDF转图片后用OCR识别，适合扫描件/图片型PDF
@@ -999,8 +1010,10 @@ def extract_text_from_pdf(pdf_path):
         text = ""
         for img in images:
             text += pytesseract.image_to_string(img, lang="chi_sim+eng") + "\n"
+        print(f"[DEBUG] OCR 提取文本长度: {len(text)}")
         return text
     except Exception:
+        print(f"[DEBUG] OCR 解析异常: {e}")
         return ""
 
 
@@ -1031,120 +1044,178 @@ def pdf2text():
     return jsonify({"status": "success", "text": text[:30000]})
 
 
+def extract_jsons(s):
+    # 优先找[...]
+    arr_match = re.search(r"(\[[\s\S]+\])", s)
+    if arr_match:
+        try:
+            return json.loads(arr_match.group(1))
+        except Exception:
+            pass
+    # fallback：找所有 {...}
+    obj_matches = re.findall(r"\{[\s\S]*?\}", s)
+    if obj_matches:
+        res = []
+        for obj in obj_matches:
+            try:
+                res.append(json.loads(obj))
+            except Exception:
+                continue
+        if res:
+            return res
+    # fallback: 全部失败
+    raise ValueError("AI未输出合法JSON结构")
+
+
 DEEPSEEK_KEY = "sk-6a104b306d4d41378825c18da83b0e6b"
 client = OpenAI(api_key=DEEPSEEK_KEY, base_url="https://api.deepseek.com")
 
 
 # 后端API：POST /api/ai_generate_questions
 @app.route("/api/ai_generate_questions", methods=["POST"])
+@login_required
 def ai_generate_questions():
-    # 获取参数
-    count = int(request.form.get("count", 1))
-    level = request.form.get("level", "基础理解")
-    file = request.files.get("file")
+    """
+    前端传: material_id, text, type, count, level(签名系统用)
+    type: single(单选题), judge(判断题)
+    """
+    data = request.get_json()
+    material_id = data.get("material_id")
+    text = data.get("text", "")
+    q_type = data.get("type", "single")  # 'single' or 'judge'
+    count = int(data.get("count", 3))
+    level = data.get("level", "easy")  # easy/deep
 
-    if not file or not file.filename.lower().endswith(".pdf"):
-        return jsonify({"status": "fail", "msg": "请上传PDF文件"}), 400
+    # 获取材料的文本内容
+    material = TrainingMaterial.query.filter_by(
+        id=material_id, user_id=current_user.id
+    ).first()
+    if not material:
+        return jsonify({"status": "fail", "msg": "材料不存在"}), 404
 
-    # 1. 提取pdf文本
-    save_path = os.path.join("/tmp", file.filename)
-    file.save(save_path)
+    # 获取材料的文本内容（直接从数据库中获取）
+    text = material.text_content
 
-    pdf_text = extract_text_from_pdf(save_path)
-    os.remove(save_path)
+    # 基本校验
+    if not text or len(text.strip()) < 40:
+        return jsonify({"status": "fail", "msg": "材料文本内容过少"}), 200
 
-    if not pdf_text or len(pdf_text.strip()) < 40:
-        return jsonify({"status": "fail", "msg": "PDF文本内容过少"}), 200
+    # 新增：获取当前材料下所有已有题干，防止重复
+    existed_questions = TrainingQuestion.query.filter_by(
+        material_id=material_id, user_id=current_user.id
+    ).all()
+    existed_contents = [
+        q.content.strip() for q in existed_questions if q.content.strip()
+    ]
+    existed_prompt = ""
+    if existed_contents:
+        existed_prompt = "请不要生成与以下题目内容重复的题目：\n" + "\n".join(
+            [f"{i+1}. {c}" for i, c in enumerate(existed_contents)]
+        )
 
-    # 2. 拼接prompt
-    prompt = f"""
-        请根据以下文档内容，自动生成{count}道选择题。所有题型为“单选题”。难度控制为“{level}”。
-        要求输出严格如下格式的JSON列表（不要输出其他内容）：
+    # 1. 拼接prompt（题型适配）
+    if q_type == "single":
+        prompt = f"""
+        {existed_prompt}
+
+        请根据以下材料内容，自动生成{count}道“单选题”（每题4个选项，且只有1个正确答案），题目难度为“{level}”。
+        要求内容创新，不能与已有题目内容和问法重复。
+        严格输出如下格式的JSON数组（无说明）：
         [
         {{
             "content": "题干内容",
-            "options": ["A选项", "B选项", ...],
+            "options": ["A选项", "B选项", "C选项", "D选项"],
             "answer": 0
         }}
         ]
-        文档内容如下：
+        材料内容如下：
         -----------------
-        {pdf_text[:5000]}   # 控制最大长度，防止超长token
+        {text}
         -----------------
         """
+    elif q_type == "judge":
+        prompt = f"""
+        {existed_prompt}
 
-    # 3. 调用deepseek
+        请根据以下材料内容，自动生成{count}道“判断题”。每题答案为“正确”或“错误”二选一，题目难度为“{level}”。
+        要求内容创新，不能与已有题目内容和问法重复。
+        严格输出如下格式的JSON数组（无说明）：
+        [
+        {{
+            "content": "题干内容",
+            "answer": 0
+        }}
+        ]
+        材料内容如下：
+        -----------------
+        {text}
+        -----------------
+        """
+    else:
+        return jsonify({"status": "fail", "msg": "暂不支持的题型type"}), 200
+
+    # AI调用
     try:
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model="deepseek-reasoner",
             messages=[
                 {
                     "role": "system",
-                    "content": "你是一个擅长出题的老师，请按要求输出JSON。",
+                    "content": "你是一个擅长出题的老师，只输出 JSON 数组本身，不要有任何注释、说明或多余内容。",
                 },
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=6000,  # 可调整
+            response_format={"type": "json_object"},
+            max_tokens=32000,
             temperature=1.0,
             stream=False,
         )
         output = response.choices[0].message.content.strip()
+        questions = extract_jsons(output)
 
-        # 4. 尝试解析JSON
-        start = output.find("[")
-        end = output.rfind("]")
+        # 数组形式容错
+        if isinstance(questions, dict) and "questions" in questions:
+            questions = questions["questions"]
 
-        if start == -1 or end == -1:
-            raise ValueError("AI未输出合法JSON")
-        json_str = output[start : end + 1]
-        questions = json.loads(json_str)
+        # 补充字段适配
+        if q_type == "single":
+            for q in questions:
+                if "correct" in q:
+                    q["answer"] = q["correct"]
+                if "options" not in q:
+                    q["options"] = ["A", "B", "C", "D"]
+        elif q_type == "judge":
+            for q in questions:
+                q["options"] = ["正确", "错误"]
+                if "correct" in q:
+                    q["answer"] = q["correct"]
+                if "正确" in q:
+                    q["answer"] = q["正确"]
+                try:
+                    q["answer"] = int(q["answer"])
+                except Exception:
+                    q["answer"] = 0
 
-        # 兼容: 答案字段名如果是answer/正确/idx等，做一次映射
-        for q in questions:
-            if "correct" in q:
-                q["answer"] = q["correct"]
-            if "正确" in q:
-                q["answer"] = q["正确"]
         return jsonify({"status": "success", "questions": questions})
+
     except Exception as e:
         import traceback
 
         traceback.print_exc()
-
-        # 尝试获取 DeepSeek API 的 http 错误码（如有）
-        code = 500  # 默认500（服务器错误）
+        code = 500
         msg = f"AI生成题目失败: {str(e)}"
 
-        # 通用OpenAI/DeepSeek异常格式处理（假如 SDK 抛带 http_status/code 的异常）
         if hasattr(e, "status_code"):
             code = e.status_code
         elif hasattr(e, "http_status"):
             code = e.http_status
-        # openai库 可能有error属性
         elif hasattr(e, "error") and hasattr(e.error, "code"):
             code = e.error.code
-        # requests HTTPError
         elif hasattr(e, "response") and hasattr(e.response, "status_code"):
             code = e.response.status_code
-        # DeepSeek有的报错可能直接是数字
         elif isinstance(e, int):
             code = e
 
-        # 细化文案
-        if code == 401:
-            msg = "API认证失败，请检查API Key设置。"
-        elif code == 402:
-            msg = "API账户余额不足，请充值后重试。"
-        elif code == 422:
-            msg = "参数错误，请联系管理员检查配置。"
-        elif code == 429:
-            msg = "请求过于频繁，请稍后再试。"
-        elif code == 500:
-            msg = "AI服务器故障，请稍后再试。"
-        elif code == 503:
-            msg = "AI服务繁忙，请等待片刻后重试。"
-
-        # 有时 DeepSeek 返回内容在异常内容里（字符串）
         if "余额不足" in str(e):
             code = 402
             msg = "API账户余额不足，请充值后重试。"
@@ -1260,6 +1331,25 @@ def training_materials():
             200,
         )
 
+    # 计算文件的MD5值
+    file_md5 = hashlib.md5(file.read()).hexdigest()
+    file.seek(0)  # 重新设置文件指针，确保后续代码能正常读取文件
+
+    # 检查文件是否已经存在
+    existing_material = TrainingMaterial.query.filter_by(md5=file_md5).first()
+    if existing_material:
+        return (
+            jsonify(
+                {
+                    "status": "exists",
+                    "msg": "文件已存在",
+                    "file_path": existing_material.file_path,
+                    "text_content": existing_material.text_content,  # 如果已存在，返回文本内容
+                }
+            ),
+            200,
+        )
+
     ext = file.filename.rsplit(".", 1)[1].lower()
 
     # ========== 先插入材料表，获取唯一ID ==========
@@ -1268,6 +1358,7 @@ def training_materials():
         title=title,
         description=desc,
         file_path="",  # 先占位，后面补
+        md5=file_md5,  # 存储MD5值
     )
     db.session.add(mat)
     db.session.flush()  # 不commit可以拿到mat.id
@@ -1316,9 +1407,15 @@ def training_materials():
         db.session.rollback()
         return jsonify({"status": "fail", "msg": f"文件转换出错：{e}"}), 500
 
+    # 提取文本内容并存储到数据库
+    text_content = extract_text_from_pdf(pdf_save_path)
+    mat.text_content = text_content  # 保存提取的文本内容
+    db.session.commit()  # 提交保存
+
     # ========== 更新file_path为规范路径并提交 ==========
     mat.file_path = os.path.join(str(current_user.id), pdf_filename)
     db.session.commit()
+
     return jsonify(
         {
             "status": "success",
@@ -1328,6 +1425,7 @@ def training_materials():
                 "description": mat.description or "",
                 "file_path": mat.file_path,
                 "created_at": mat.created_at.strftime("%Y-%m-%d %H:%M"),
+                "text_content": mat.text_content,  # 返回文本内容
             },
         }
     )
@@ -1350,6 +1448,7 @@ def training_materials_list():
             "description": m.description or "",
             "created_at": m.created_at.strftime("%Y-%m-%d %H:%M"),
             "file_path": m.file_path,
+            "text_content": m.text_content or "",  # Ensure text_content is included
         }
 
     return jsonify({"mats": [mat2dict(m) for m in mats]})
@@ -1370,6 +1469,28 @@ def delete_material(mat_id):
     return jsonify({"status": "not_found"}), 404
 
 
+@app.route("/training_materials/get_text/<int:material_id>")
+@login_required
+def get_material_text(material_id):
+    mat = TrainingMaterial.query.filter_by(
+        id=material_id, user_id=current_user.id
+    ).first()
+    if not mat:
+        return jsonify({"status": "fail", "msg": "材料不存在"}), 404
+
+    pdf_path = os.path.join("static/training_materials", mat.file_path)
+    if not os.path.exists(pdf_path):
+        return jsonify({"status": "fail", "msg": "文件不存在"}), 404
+
+    try:
+        text = extract_text_from_pdf(pdf_path)
+        if not text or len(text.strip()) < 10:
+            return jsonify({"status": "fail", "msg": "未能提取文本"}), 200
+        return jsonify({"status": "success", "text": text[:30000]})
+    except Exception as e:
+        return jsonify({"status": "fail", "msg": f"提取异常: {e}"}), 500
+
+
 # ===============================
 # 6. 培训系统 —— 题库管理
 # ===============================
@@ -1387,12 +1508,21 @@ def training_questions_list():
     )
 
     def q2dict(q):
+        options = json.loads(q.options)
+        # 判断题：options固定为["正确","错误"]
+        if options == ["正确", "错误"]:
+            qtype = "判断"
+        elif q.multiple:
+            qtype = "多选"
+        else:
+            qtype = "单选"
         return {
             "id": q.id,
             "content": q.content,
-            "options": json.loads(q.options),
+            "options": options,
             "correct_answers": json.loads(q.correct_answers),
             "multiple": q.multiple,
+            "qtype": qtype,  # 新增类型字段
         }
 
     return jsonify({"questions": [q2dict(q) for q in questions]})

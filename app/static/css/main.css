@@ -765,3 +765,76 @@ textarea:focus {
     /* 更深一点的绿色 */
     color: #fff;
 }
+
+.table-scroll-x {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    box-shadow: 0 2px 6px #0001;
+}
+
+.table-scroll-x .record-table {
+    min-width: 1200px;
+    /* 你可以根据实际字段数调整 */
+    width: max-content;
+}
+
+.table-scroll-x::-webkit-scrollbar {
+    height: 8px;
+    background: #f5f7fa;
+    border-radius: 8px;
+}
+
+.table-scroll-x::-webkit-scrollbar-thumb {
+    background: #e3e7ef;
+    border-radius: 8px;
+}
+
+.hidden-column {
+    display: none;
+}
+
+/* 弹窗背景 */
+.modal-mask {
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.16);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 弹窗内容样式 */
+.modal-content {
+    background: #fff;
+    border-radius: 12px;
+    padding: 32px 36px 20px;
+    max-width: 700px;
+    min-width: 400px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+    position: relative;
+    overflow-y: auto;
+    max-height: 80vh;
+    /* 设置最大高度 */
+}
+
+.modal-content button {
+    background-color: #e74c3c;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-top: 10px;
+    font-size: 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.modal-content button:hover {
+    background-color: #c0392b;
+}

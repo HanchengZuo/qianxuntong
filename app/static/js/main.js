@@ -361,28 +361,55 @@ function loadMaterialList() {
         .then(data => renderMaterialList(data.mats));
 }
 
-// 渲染材料列表（重置tbody内容并插入所有行）（把现有材料数据渲染出来）
+// 渲染材料列表（重置tbody内容并插入所有行）
 function renderMaterialList(mats) {
     const tbody = document.querySelector('#training-materials-section tbody');
     tbody.innerHTML = '';
     mats.forEach((mat, idx) => insertMaterialRow(mat, idx + 1));
 }
 
-// 插入单行材料数据到表格（含预览和删除按钮）
+// 插入单行材料数据到表格（含预览、删除按钮和查看文本按钮）
 function insertMaterialRow(mat, serial) {
     const tbody = document.querySelector('#training-materials-section tbody');
     const tr = document.createElement('tr');
     tr.innerHTML = `
         <td>${serial}</td>
-        <td>${mat.id}</td>
+        <td class="hidden-column">${mat.id}</td>
         <td>${mat.title}</td>
         <td>${mat.created_at}</td>
         <td>
             <a class="btn-view" href="/static/training_materials/${mat.file_path}" target="_blank">🔍 预览</a>
             <button class="btn-delete" onclick="deleteMaterial(${mat.id}, this, event)">🗑 删除</button>
+            ${mat.text_content ? `<button class="btn-view-text" onclick="viewText(${mat.id})">查看文本</button>` : ''}
         </td>
     `;
     tbody.appendChild(tr);
+}
+
+// 查看文本按钮点击事件
+function viewText(materialId) {
+    fetch(`/training_materials/get_text/${materialId}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success' && data.text) {
+                showToast('文本已加载');
+                // 更新新的文本弹窗内容
+                const textModalContent = document.getElementById('textModalContent');
+                textModalContent.textContent = data.text;
+
+                // 显示弹窗
+                document.getElementById('textModal').style.display = 'flex';
+            } else {
+                showToast('❌ 获取文本失败', true);
+            }
+        }).catch(() => {
+            showToast('❌ 获取文本异常', true);
+        });
+}
+
+// 关闭新的文本弹窗
+function closeTextModal() {
+    document.getElementById('textModal').style.display = 'none';
 }
 
 // 上传按钮点击，自动触发文件选择
@@ -392,41 +419,63 @@ document.getElementById('uploadMaterialBtn').onclick = function () {
 
 // 文件选择后自动上传（仅限PDF）
 document.getElementById('hiddenMaterialFile').onchange = function (e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const allowedExt = /\.(pdf|doc|docx|jpg|jpeg|png)$/i;
-    const maxSize = 30 * 1024 * 1024; // 30MB
+    const file = e.target.files[0];  // 获取选择的文件
+    if (!file) return;  // 如果没有文件被选择，则直接返回
 
+    const allowedExt = /\.(pdf|doc|docx|jpg|jpeg|png)$/i;  // 允许的文件扩展名
+    const maxSize = 30 * 1024 * 1024;  // 最大文件大小 30MB
+
+    // 检查文件扩展名是否符合要求
     if (!allowedExt.test(file.name)) {
         showToast('❌ 仅支持 PDF、Word、图片格式文件！', true);
-        return;
+        return;  // 文件格式不正确，终止后续流程
     }
 
+    // 检查文件大小是否超过限制
     if (file.size > maxSize) {
-        showToast('❌ 文件太大，请上传20MB以内的文件', true);
-        return;
+        showToast('❌ 文件太大，请上传30MB以内的文件', true);
+        return;  // 文件大小超出限制，终止后续流程
     }
 
+    // 上传文件到后端
+    uploadMaterialFile(file);
+};
+
+// 文件上传并解析的逻辑
+function uploadMaterialFile(file) {
     // 构造FormData，标题用文件名
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('title', file.name.replace(/\.[^.]+$/, '')); // 标题直接用文件名
+    formData.append('title', file.name.replace(/\.[^.]+$/, ''));  // 标题使用文件名（去除扩展名）
+
+    // 锁定页面
+    lockPage();
+
+    // 显示提示
+    showToast('正在转换PDF为文本，请稍等...', false, true);
+
+    // 发送文件到后端
     fetch('/training_materials', {
         method: 'POST',
         body: formData
     }).then(r => r.json()).then(data => {
         if (data.status === 'success') {
             showToast('✅ 上传成功！');
-            loadMaterialList();
+            loadMaterialList();  // 上传成功后加载材料列表
+            // 显示查看文本按钮
+            insertMaterialRow(data.mat);
         } else {
             showToast('❌ ' + (data.msg || '上传失败！'), true);
         }
-        e.target.value = ''; // 清空选择
+        unlockPage();  // 解锁页面
+        document.getElementById('hiddenMaterialFile').value = '';  // 清空选择框
     }).catch(err => {
         showToast('❌ 上传异常！', true);
-        e.target.value = '';
+        unlockPage();  // 解锁页面
+        document.getElementById('hiddenMaterialFile').value = '';  // 清空选择框
     });
-};
+}
+
 
 // 删除材料（确认后发请求并删除表格行）
 function deleteMaterial(id, btn, event) {
@@ -485,28 +534,40 @@ document.getElementById('materialSelect').addEventListener('change', function ()
 });
 
 // ------- 6.2 加载指定材料下的所有题目 -------
-function loadQuestions(materialId) {
+function loadQuestions(materialId, callback) {
     fetch(`/training_questions/list?material_id=${materialId}`)
         .then(r => r.json())
-        .then(data => renderQuestionTable(data.questions || []));
+        .then(data => {
+            renderQuestionTable(data.questions || []);
+            if (callback) callback();
+        });
 }
 
 // ------- 6.3 渲染题目表格列表 -------
 function renderQuestionTable(questions) {
+    questions.sort((a, b) => a.id - b.id);
     const tbody = document.getElementById('questionTableBody');
     if (!questions.length) {
-        tbody.innerHTML = '<tr><td colspan="6">本材料下暂无题目</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7">本材料下暂无题目</td></tr>'; // 注意colspan要和表头列数一致
         return;
     }
     tbody.innerHTML = '';
     questions.forEach((q, idx) => {
+        // 判断题型显示文本
+        let typeText = q.qtype || (q.multiple ? '多选' : '单选');
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${idx + 1}</td>
-            <td>${q.id}</td>
+            <td class="hidden-column">${q.id}</td>
             <td>${q.content}</td>
-            <td>单选</td>
-            <td>${q.options.map((opt, idx) => `<div>${String.fromCharCode(65 + idx)}. ${opt}</div>`).join('')}</td>
+            <td>${typeText}</td>
+            <td>${q.options.map((opt, oi) => {
+            // 如果选项本身已以 A. / B. / C. / D. 开头，则直接展示
+            return /^[A-D][.．、]\s*/.test(opt)
+                ? `<div>${opt}</div>`
+                : `<div>${String.fromCharCode(65 + oi)}. ${opt}</div>`
+        }).join('')
+            }</td>
             <td>${q.correct_answers.map(i => String.fromCharCode(65 + i)).join(', ')}</td>
             <td>
                 <button class="btn-add" onclick="editQuestion(${q.id})">编辑</button>
@@ -516,6 +577,7 @@ function renderQuestionTable(questions) {
         tbody.appendChild(tr);
     });
 }
+
 
 // ======= 6.4 题目弹窗相关 =======
 
@@ -680,7 +742,7 @@ function renderTrainingStatsTable(tasks) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${idx + 1}</td>
-            <td>${task.id}</td>
+            <td class="hidden-column">${task.id}</td>
             <td>${task.title}</td>
             <td>${task.material}</td>
             <td>${task.created_at}</td>
@@ -1118,3 +1180,115 @@ function submitAIGenerate() {
         showToast(errMsg, true);
     });
 }
+
+// ==========================
+// 11. 培训系统的AI生成题目
+// ==========================
+
+function openAIGenerateQBankModal() {
+    document.getElementById('aiGenerateQBankModal').style.display = 'block';
+    document.getElementById('aiGenQBankLoading').style.display = 'none';
+    document.getElementById('aiGenQBankError').style.display = 'none';
+}
+function hideAIGenerateQBankModal() {
+    document.getElementById('aiGenerateQBankModal').style.display = 'none';
+}
+
+function submitAIGenerateQBank() {
+    const materialSelect = document.getElementById('materialSelect');
+    const materialId = materialSelect.value;
+    if (!materialId) {
+        showToast('请先选择培训材料', true);
+        return;
+    }
+    const qType = document.getElementById('aiQBankType').value;
+    const qCount = document.getElementById('aiQBankCount').value || 3;
+    const qLevel = document.getElementById('aiQBankLevel').value || 'easy';
+
+    showToast('正在生成题目，请稍候…', false, true);
+    document.getElementById('aiGenQBankLoading').style.display = 'block';
+    document.getElementById('aiGenQBankError').style.display = 'none';
+
+    lockPage();  // ====== ① 锁死页面防止乱点 ======
+
+    fetch(`/training_materials/get_text/${materialId}`).then(r => r.json()).then(res => {
+        if (res.status !== 'success' || !res.text) {
+            showToast('获取材料文本失败', true);
+            document.getElementById('aiGenQBankLoading').style.display = 'none';
+            unlockPage();
+            return;
+        }
+        fetch('/api/ai_generate_questions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                material_id: materialId,
+                text: res.text,
+                type: qType,
+                count: qCount,
+                level: qLevel
+            })
+        }).then(r => r.json()).then(data => {
+            document.getElementById('aiGenQBankLoading').style.display = 'none';
+            if (data.status === 'success' && data.questions && data.questions.length) {
+                // ====== ② 批量插入题目，Promise.all后再刷新 ======
+                let insertPromises = data.questions.map(q => insertAIQuestionToQBank(q, qType));
+                Promise.all(insertPromises).then(() => {
+                    hideAIGenerateQBankModal();
+                    showToast('AI题目生成成功');
+                    // ====== ③ 刷新题库后自动滚动到底部 ======
+                    loadQuestions(materialId, () => {
+                        // 延迟50ms等渲染完
+                        setTimeout(() => {
+                            const tbody = document.getElementById('questionTableBody');
+                            if (tbody && tbody.lastElementChild) {
+                                tbody.lastElementChild.scrollIntoView({ behavior: "smooth", block: "end" });
+                            }
+                        }, 50);
+                    });
+                }).finally(() => {
+                    unlockPage(); // ====== ④ 解锁页面 ======
+                });
+            } else {
+                const msg = data.msg || 'AI生成失败';
+                document.getElementById('aiGenQBankError').style.display = 'block';
+                document.getElementById('aiGenQBankError').textContent = msg;
+                showToast(msg, true);
+                unlockPage();
+            }
+        }).catch(err => {
+            document.getElementById('aiGenQBankLoading').style.display = 'none';
+            document.getElementById('aiGenQBankError').style.display = 'block';
+            document.getElementById('aiGenQBankError').textContent = 'AI服务异常: ' + err;
+            showToast('AI服务异常', true);
+            unlockPage();
+        });
+    });
+}
+
+// insertAIQuestionToQBank 优化为返回 Promise
+function insertAIQuestionToQBank(q, qType) {
+    let options = [];
+    let correct_answers = [];
+    if (qType === 'single') {
+        options = q.options;
+        correct_answers = [q.answer];
+    } else if (qType === 'judge') {
+        options = ['正确', '错误'];
+        correct_answers = [q.answer];
+    }
+    // 返回 promise 以便批量插入后统一刷新
+    return fetch('/training_questions/new', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            material_id: currentMaterialId,
+            content: q.content,
+            options: options,
+            correct_answers: correct_answers,
+            multiple: false,
+            type: qType
+        })
+    });
+}
+
