@@ -1237,7 +1237,7 @@ function submitAIGenerateQBank() {
     const qCount = document.getElementById('aiQBankCount').value || 3;
     const qLevel = document.getElementById('aiQBankLevel').value || 'easy';
 
-    showToast('正在生成题目，请稍候…', false, true);
+    showToast('正在AI生成题目，预计1-3分钟，请勿关闭或刷新页面，耐心等待即可…', false, true);
     document.getElementById('aiGenQBankLoading').style.display = 'block';
     document.getElementById('aiGenQBankError').style.display = 'none';
 
