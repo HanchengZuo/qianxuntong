@@ -32,7 +32,8 @@ import tempfile
 import platform
 from flask import request, send_file, jsonify
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Pt, RGBColor
+from docx.oxml.ns import qn
 from flask_migrate import Migrate
 import shutil
 from PIL import Image
@@ -46,7 +47,7 @@ from pdf2image import convert_from_path
 import pytesseract
 from openai import OpenAI
 import hashlib
-
+import subprocess
 
 # ========== Flask app与数据库配置 ==========
 app = Flask(__name__)
@@ -1069,6 +1070,130 @@ def extract_jsons(s):
 
 DEEPSEEK_KEY = "sk-6a104b306d4d41378825c18da83b0e6b"
 client = OpenAI(api_key=DEEPSEEK_KEY, base_url="https://api.deepseek.com")
+
+
+@app.route("/api/sign_ai_generate_questions", methods=["POST"])
+@login_required
+def sign_ai_generate_questions():
+    """
+    专供签名系统AI生成题目。
+    前端传：text, type, count, level
+    type: single(单选题), judge(判断题)  (默认single)
+    """
+    data = request.get_json()
+    text = data.get("text", "")
+    q_type = data.get("type", "single")  # 'single' or 'judge'
+    count = int(data.get("count", 3))
+    level = data.get("level", "easy")  # easy/deep
+
+    if not text or len(text.strip()) < 40:
+        return jsonify({"status": "fail", "msg": "请先上传PDF并确保内容足够"}), 200
+
+    # 拼接prompt
+    if q_type == "single":
+        prompt = f"""
+        请根据以下材料内容，自动生成{count}道“单选题”（每题4个选项，且只有1个正确答案），题目难度为“{level}”。
+        严格输出如下格式的JSON数组（无说明）：
+        [
+        {{
+            "content": "题干内容",
+            "options": ["A选项", "B选项", "C选项", "D选项"],
+            "answer": 0
+        }}
+        ]
+        材料内容如下：
+        -----------------
+        {text}
+        -----------------
+        """
+    elif q_type == "judge":
+        prompt = f"""
+        请根据以下材料内容，自动生成{count}道“判断题”。每题答案为“正确”或“错误”二选一，题目难度为“{level}”。
+        严格输出如下格式的JSON数组（无说明）：
+        [
+        {{
+            "content": "题干内容",
+            "answer": 0
+        }}
+        ]
+        材料内容如下：
+        -----------------
+        {text}
+        -----------------
+        """
+    else:
+        return jsonify({"status": "fail", "msg": "暂不支持的题型type"}), 200
+
+    # AI调用
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-reasoner",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "你是一个擅长出题的老师，只输出 JSON 数组本身，不要有任何注释、说明或多余内容。",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=32000,
+            temperature=1.0,
+            stream=False,
+        )
+        output = response.choices[0].message.content.strip()
+        questions = extract_jsons(output)
+
+        # 数组形式容错
+        if isinstance(questions, dict) and "questions" in questions:
+            questions = questions["questions"]
+
+        # 补充字段适配
+        if q_type == "single":
+            for q in questions:
+                if "correct" in q:
+                    q["answer"] = q["correct"]
+                if "options" not in q:
+                    q["options"] = ["A", "B", "C", "D"]
+        elif q_type == "judge":
+            for q in questions:
+                q["options"] = ["正确", "错误"]
+                if "correct" in q:
+                    q["answer"] = q["correct"]
+                if "正确" in q:
+                    q["answer"] = q["正确"]
+                try:
+                    q["answer"] = int(q["answer"])
+                except Exception:
+                    q["answer"] = 0
+
+        return jsonify({"status": "success", "questions": questions})
+
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        code = 500
+        msg = f"AI生成题目失败: {str(e)}"
+
+        if hasattr(e, "status_code"):
+            code = e.status_code
+        elif hasattr(e, "http_status"):
+            code = e.http_status
+        elif hasattr(e, "error") and hasattr(e.error, "code"):
+            code = e.error.code
+        elif hasattr(e, "response") and hasattr(e.response, "status_code"):
+            code = e.response.status_code
+        elif isinstance(e, int):
+            code = e
+
+        if "余额不足" in str(e):
+            code = 402
+            msg = "API账户余额不足，请充值后重试。"
+        elif "认证失败" in str(e):
+            code = 401
+            msg = "API认证失败，请检查API Key设置。"
+
+        return jsonify({"status": "fail", "msg": msg, "code": code}), 200
 
 
 # 后端API：POST /api/ai_generate_questions
@@ -2223,6 +2348,153 @@ def get_training_record(task_id):
             },
         }
     )
+
+
+@app.route("/export_exam_docx", methods=["POST"])
+def export_exam_docx():
+    data = request.get_json()
+    doc = Document()
+    # 抬头
+    p = doc.add_paragraph()
+    r = p.add_run(data.get("header") or "（试卷抬头）")
+    r.font.size = Pt(18)
+    r.font.name = "方正小标宋简"
+    r._element.rPr.rFonts.set(qn("w:eastAsia"), "方正小标宋简")
+    p.alignment = 1
+    # 标题
+    p = doc.add_paragraph()
+    r = p.add_run(data.get("title") or "（试卷标题）")
+    r.font.size = Pt(22)
+    r.font.name = "华文行楷"
+    r._element.rPr.rFonts.set(qn("w:eastAsia"), "华文行楷")
+    p.alignment = 1
+    # 副标题
+    p = doc.add_paragraph()
+    r = p.add_run(data.get("subtitle") or "（副标题）")
+    r.font.size = Pt(18)
+    r.font.name = "华文楷体"
+    r._element.rPr.rFonts.set(qn("w:eastAsia"), "华文楷体")
+    p.alignment = 1
+    # 考试信息
+    p = doc.add_paragraph()
+    p.alignment = 1
+    r = p.add_run(
+        f"考试时长：{data['time']}    满分：{data['score']}    及格线：{data['pass']}"
+    )
+    r.font.size = Pt(12)
+    r.font.name = "宋体"
+    r._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+    # 姓名栏
+    p = doc.add_paragraph()
+    p.alignment = 1
+    r = p.add_run(
+        "姓名：__________    得分：__________    站名：__________    岗位：__________"
+    )
+    r.font.size = Pt(12)
+    r.font.name = "宋体"
+    r._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+    doc.add_paragraph("")  # 空行
+
+    # 题目分组
+    judge = [
+        q
+        for q in data["questions"]
+        if q.get("qtype") == "judge"
+        or (not q.get("options") or len(q.get("options", [])) == 2)
+    ]
+    single = [
+        q
+        for q in data["questions"]
+        if q.get("qtype") == "single"
+        or (q.get("options") and len(q.get("options", [])) > 2)
+    ]
+
+    judge_total = 40
+    single_total = 60
+    judge_score = round(judge_total / len(judge), 2) if judge else 0
+    single_score = round(single_total / len(single), 2) if single else 0
+
+    # 判断题
+    if judge:
+        p = doc.add_paragraph()
+        run = p.add_run(f"一、判断题（每题{judge_score}分，共{judge_total}分）")
+        run.font.size = Pt(12)
+        run.font.name = "宋体"
+        run._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+        for idx, q in enumerate(judge):
+            p = doc.add_paragraph()
+            # 括号加在题号前
+            r = p.add_run(f"（   ）{idx+1}. {q.get('content')}")
+            r.font.size = Pt(12)
+            r.font.name = "宋体"
+            r._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+
+    # 单选题
+    if single:
+        p = doc.add_paragraph()
+        run = p.add_run(f"二、单项选择题（每题{single_score}分，共{single_total}分）")
+        run.font.size = Pt(12)
+        run.font.name = "宋体"
+        run._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+        for idx, q in enumerate(single):
+            p = doc.add_paragraph()
+            r = p.add_run(f"{idx+1}. {q.get('content')}（   ）")  # 括号加在题目最后
+            r.font.size = Pt(12)
+            r.font.name = "宋体"
+            r._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+            option_lines = smart_layout_options(q.get("options", []))  # 智能排布选项
+            for line in option_lines:
+                po = doc.add_paragraph("    " + line)
+                runo = po.runs[0]
+                runo.font.size = Pt(12)
+                runo.font.name = "宋体"
+                runo._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+
+    doc.add_paragraph("")
+    p = doc.add_paragraph()
+    r = p.add_run("阅卷人签字：_____________________        日期：______________")
+    r.font.size = Pt(12)
+    r.font.name = "宋体"
+    r._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+
+    # 保存临时Word文件并返回
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_word:
+        doc.save(tmp_word.name)
+        word_path = tmp_word.name
+
+    return send_file(
+        word_path, as_attachment=True, download_name=(data["title"] or "试卷") + ".docx"
+    )
+
+
+def get_char_len(s):
+    # 简单估算字符串显示宽度：中文算2，英文数字算1
+    return sum(2 if ord(c) > 127 else 1 for c in s)
+
+
+def smart_layout_options(options, max_line_len=36):
+    """根据内容长度智能排列选项，每行不超过max_line_len字符"""
+    if not options:
+        return []
+    n = len(options)
+    abcd = [f"{chr(65+i)}、{opt}" for i, opt in enumerate(options)]
+    # 1. 尝试一行放下
+    joined = "    ".join(abcd)
+    if get_char_len(joined) <= max_line_len:
+        return [joined]
+    # 2. 尝试两行平均分
+    if n == 4:
+        first = "    ".join(abcd[:2])
+        second = "    ".join(abcd[2:])
+        if max(get_char_len(first), get_char_len(second)) <= max_line_len:
+            return [first, second]
+    if n == 3:
+        first = "    ".join(abcd[:2])
+        second = abcd[2]
+        if max(get_char_len(first), get_char_len(second)) <= max_line_len:
+            return [first, second]
+    # 3. 每行一个
+    return abcd
 
 
 # ===============================

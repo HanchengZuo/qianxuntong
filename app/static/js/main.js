@@ -8,6 +8,7 @@ function showSection(section) {
     document.getElementById('employees-section').style.display = 'none';
     document.getElementById('training-materials-section').style.display = 'none';
     document.getElementById('training-task-section').style.display = 'none';
+    document.getElementById('exam-generator-section').style.display = 'none';
     document.getElementById('training-stats-section').style.display = 'none';
     document.getElementById(section + '-section').style.display = 'block';
 
@@ -16,6 +17,7 @@ function showSection(section) {
     if (section === 'question-bank') loadQuestionMaterials();
     if (section === 'training-task') document.getElementById('training-task-section').style.display = 'block';
     if (section === 'training-stats') loadTrainingStats();
+    if (section === 'exam-generator') initExamGenerator();
 }
 
 function navigateAndRemember(section) {
@@ -1058,8 +1060,7 @@ function hideAIGenerateModal() {
     document.getElementById('aiGenerateModal').style.display = 'none';
 }
 
-
-// 真正的AI生成题目提交
+// 真正的AI生成题目提交（先提取PDF文本，再调用AI接口）
 function submitAIGenerate() {
     const fileInput = document.getElementById('fileInput');
     const file = fileInput.files[0];
@@ -1067,118 +1068,149 @@ function submitAIGenerate() {
         showToast('请先选择一个PDF文件', true);
         return;
     }
-    // 参数收集
     const count = document.getElementById('aiQCount').value || 1;
     const level = document.getElementById('aiQLevel').value || 'easy';
 
-    // ===== 加锁与提示 =====
-    showToast('正在生成题目，请稍候…', false, true);
+    showToast('正在读取PDF内容，请稍候…', false, true);
     lockPage();
-
     document.getElementById('aiGenLoading').style.display = 'block';
     document.getElementById('aiGenError').style.display = 'none';
 
+    // 步骤1：提取PDF文本
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('count', count);
-    formData.append('level', level);
 
-    fetch('/api/ai_generate_questions', {
+    fetch('/api/pdf2text', {
         method: 'POST',
         body: formData
-    }).then(r => r.json()).then(res => {
-        document.getElementById('aiGenLoading').style.display = 'none';
-        unlockPage();
-        hideToast(); // 立即消失loading提示
-
-        if (res.status === 'success') {
-            const container = document.getElementById("question-container");
-            const newQuestions = res.questions || [];
-            let quizBlocks = container.querySelectorAll('.quiz-question-block');
-            let aiFillIndex = 0;
-
-            // 优先复用“第一个空白题块”
-            if (quizBlocks.length > 0) {
-                let firstBlock = quizBlocks[0];
-                let contentTextarea = firstBlock.querySelector('textarea[name$="[content]"]');
-                let optionTextareas = firstBlock.querySelectorAll('textarea[name^="questions"][name$="[options][]"]');
-                let allEmpty = (!contentTextarea.value.trim()) && Array.from(optionTextareas).every(o => !o.value.trim());
-
-                if (allEmpty && newQuestions.length > 0) {
-                    // 填充AI生成的第一题到第一个空白题
-                    contentTextarea.value = newQuestions[0].content;
-                    // 清空默认选项
-                    let optionsContainer = firstBlock.querySelector('.options-container');
-                    optionsContainer.innerHTML = '';
-                    let options = newQuestions[0].options || [];
-                    let answer = typeof newQuestions[0].answer === "number" ? newQuestions[0].answer : 0;
-                    options.forEach((opt, oi) => {
-                        let btn = firstBlock.querySelector('button[onclick^="addQuizOption"]');
-                        addQuizOption(btn, 0); // 题号用0
-                        let optTextareas = firstBlock.querySelectorAll('textarea[name^="questions"][name$="[options][]"]');
-                        if (optTextareas[oi]) optTextareas[oi].value = opt;
-                        let radios = firstBlock.querySelectorAll('input[type="radio"]');
-                        if (oi == answer && radios[oi]) radios[oi].checked = true;
-                    });
-                    aiFillIndex = 1;
-                }
+    })
+        .then(r => r.json())
+        .then(res => {
+            if (res.status !== 'success' || !res.text) {
+                unlockPage();
+                hideToast();
+                document.getElementById('aiGenLoading').style.display = 'none';
+                showToast(res.msg || 'PDF识别失败', true);
+                document.getElementById('aiGenError').style.display = 'block';
+                document.getElementById('aiGenError').textContent = res.msg || 'PDF识别失败';
+                return;
             }
+            // 步骤2：AI生成题目
+            showToast('正在AI生成题目，预计1-3分钟，请勿关闭或刷新页面，耐心等待即可…', false, true);
+            fetch('/api/sign_ai_generate_questions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: res.text,
+                    type: 'single',
+                    count: count,
+                    level: level
+                })
+            })
+                .then(r => r.json())
+                .then(res2 => {
+                    unlockPage();
+                    hideToast();
+                    document.getElementById('aiGenLoading').style.display = 'none';
 
-            // 其余题目都直接 addQuestion
-            for (let qi = aiFillIndex; qi < newQuestions.length; qi++) {
-                addQuestion();
-                let block = container.lastChild;
-                block.querySelector('textarea[name$="[content]"]').value = newQuestions[qi].content;
-                let options = newQuestions[qi].options || [];
-                let answer = typeof newQuestions[qi].answer === "number" ? newQuestions[qi].answer : 0;
-                block.querySelector('.options-container').innerHTML = '';
-                options.forEach((opt, oi) => {
-                    let btn = block.querySelector('button[onclick^="addQuizOption"]');
-                    addQuizOption(btn, questionIndex - 1); // 用最新的题号
-                    let optTextareas = block.querySelectorAll('textarea[name^="questions"][name$="[options][]"]');
-                    if (optTextareas[oi]) optTextareas[oi].value = opt;
-                    let radios = block.querySelectorAll('input[type="radio"]');
-                    if (oi == answer && radios[oi]) radios[oi].checked = true;
+                    if (res2.status === 'success') {
+                        const container = document.getElementById("question-container");
+                        const newQuestions = res2.questions || [];
+                        let quizBlocks = container.querySelectorAll('.quiz-question-block');
+                        let aiFillIndex = 0;
+
+                        // 优先复用“第一个空白题块”
+                        if (quizBlocks.length > 0) {
+                            let firstBlock = quizBlocks[0];
+                            let contentTextarea = firstBlock.querySelector('textarea[name$="[content]"]');
+                            let optionTextareas = firstBlock.querySelectorAll('textarea[name^="questions"][name$="[options][]"]');
+                            let allEmpty = (!contentTextarea.value.trim()) && Array.from(optionTextareas).every(o => !o.value.trim());
+
+                            if (allEmpty && newQuestions.length > 0) {
+                                // 填充AI生成的第一题到第一个空白题
+                                contentTextarea.value = newQuestions[0].content;
+                                // 清空默认选项
+                                let optionsContainer = firstBlock.querySelector('.options-container');
+                                optionsContainer.innerHTML = '';
+                                let options = newQuestions[0].options || [];
+                                let answer = typeof newQuestions[0].answer === "number" ? newQuestions[0].answer : 0;
+                                options.forEach((opt, oi) => {
+                                    let btn = firstBlock.querySelector('button[onclick^="addQuizOption"]');
+                                    addQuizOption(btn, 0); // 题号用0
+                                    let optTextareas = firstBlock.querySelectorAll('textarea[name^="questions"][name$="[options][]"]');
+                                    if (optTextareas[oi]) optTextareas[oi].value = opt;
+                                    let radios = firstBlock.querySelectorAll('input[type="radio"]');
+                                    if (oi == answer && radios[oi]) radios[oi].checked = true;
+                                });
+                                aiFillIndex = 1;
+                            }
+                        }
+
+                        // 其余题目都直接 addQuestion
+                        for (let qi = aiFillIndex; qi < newQuestions.length; qi++) {
+                            addQuestion();
+                            let block = container.lastChild;
+                            block.querySelector('textarea[name$="[content]"]').value = newQuestions[qi].content;
+                            let options = newQuestions[qi].options || [];
+                            let answer = typeof newQuestions[qi].answer === "number" ? newQuestions[qi].answer : 0;
+                            block.querySelector('.options-container').innerHTML = '';
+                            options.forEach((opt, oi) => {
+                                let btn = block.querySelector('button[onclick^="addQuizOption"]');
+                                addQuizOption(btn, questionIndex - 1); // 用最新的题号
+                                let optTextareas = block.querySelectorAll('textarea[name^="questions"][name$="[options][]"]');
+                                if (optTextareas[oi]) optTextareas[oi].value = opt;
+                                let radios = block.querySelectorAll('input[type="radio"]');
+                                if (oi == answer && radios[oi]) radios[oi].checked = true;
+                            });
+                        }
+
+                        hideAIGenerateModal();
+                        setTimeout(function () {
+                            const q1 = document.getElementById('quiz-question-1');
+                            if (q1) q1.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }, 100);
+                        showToast('AI题目生成成功');
+                    } else {
+                        let msg = res.msg || 'AI生成失败';
+                        // 针对常见错误码定制友好提示
+                        if (res.code == 401) {
+                            msg = 'API认证失败，请检查API Key设置。';
+                        } else if (res.code == 402) {
+                            msg = 'API账户余额不足，请充值后重试。';
+                        } else if (res.code == 422) {
+                            msg = '参数错误，请联系管理员检查配置。';
+                        } else if (res.code == 429) {
+                            msg = '请求过于频繁，请稍后再试。';
+                        } else if (res.code == 500) {
+                            msg = 'AI服务器故障，请稍后再试。';
+                        } else if (res.code == 503) {
+                            msg = 'AI服务繁忙，请等待片刻后重试。';
+                        }
+                        // 弹窗+toast都给到
+                        document.getElementById('aiGenError').style.display = 'block';
+                        document.getElementById('aiGenError').textContent = msg;
+                        showToast(msg, true);
+                    }
+                })
+                .catch((err) => {
+                    unlockPage();
+                    hideToast();
+                    document.getElementById('aiGenLoading').style.display = 'none';
+                    const errMsg = 'AI服务异常: ' + err;
+                    document.getElementById('aiGenError').style.display = 'block';
+                    document.getElementById('aiGenError').textContent = errMsg;
+                    showToast(errMsg, true);
                 });
-            }
-
-            hideAIGenerateModal();
-            // === 新增：滚动到题库配置第1题 ===
-            setTimeout(function () {
-                const q1 = document.getElementById('quiz-question-1');
-                if (q1) q1.scrollIntoView({ behavior: "smooth", block: "start" });
-            }, 100);  // 等DOM渲染完再滚动
-            showToast('AI题目生成成功');
-        } else {
-            let msg = res.msg || 'AI生成失败';
-            // 针对常见错误码定制友好提示
-            if (res.code == 401) {
-                msg = 'API认证失败，请检查API Key设置。';
-            } else if (res.code == 402) {
-                msg = 'API账户余额不足，请充值后重试。';
-            } else if (res.code == 422) {
-                msg = '参数错误，请联系管理员检查配置。';
-            } else if (res.code == 429) {
-                msg = '请求过于频繁，请稍后再试。';
-            } else if (res.code == 500) {
-                msg = 'AI服务器故障，请稍后再试。';
-            } else if (res.code == 503) {
-                msg = 'AI服务繁忙，请等待片刻后重试。';
-            }
-            // 弹窗+toast都给到
+        })
+        .catch((err) => {
+            unlockPage();
+            hideToast();
+            document.getElementById('aiGenLoading').style.display = 'none';
+            const errMsg = 'PDF内容提取失败: ' + err;
             document.getElementById('aiGenError').style.display = 'block';
-            document.getElementById('aiGenError').textContent = msg;
-            showToast(msg, true);
-        }
-    }).catch((err) => {
-        document.getElementById('aiGenLoading').style.display = 'none';
-        unlockPage();
-        hideToast();
-        const errMsg = 'AI服务异常: ' + err;
-        document.getElementById('aiGenError').style.display = 'block';
-        document.getElementById('aiGenError').textContent = errMsg;
-        showToast(errMsg, true);
-    });
+            document.getElementById('aiGenError').textContent = errMsg;
+            showToast(errMsg, true);
+        });
 }
 
 // ==========================
@@ -1291,4 +1323,236 @@ function insertAIQuestionToQBank(q, qType) {
         })
     });
 }
+
+// ========== 12. 试卷生成A4 PDF ==========
+
+let examQuestions = [];  // 当前加载的题目
+let allExamMaterials = []; // 缓存所有材料
+
+function initExamGenerator() {
+    // 1. 加载所有材料填充下拉框
+    fetch('/training_materials/list')
+        .then(r => r.json())
+        .then(data => {
+            allExamMaterials = data.mats || [];
+            const select = document.getElementById('examMaterialSelect');
+            select.innerHTML = '<option value="">请选择材料</option>';
+            allExamMaterials.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.title;
+                select.appendChild(opt);
+            });
+        });
+
+    // 2. 监听切换，加载题库
+    document.getElementById('examMaterialSelect').onchange = function () {
+        const matId = this.value;
+        if (!matId) {
+            examQuestions = [];
+            renderExamPreview();
+            return;
+        }
+        fetch(`/training_questions/list?material_id=${matId}`)
+            .then(r => r.json())
+            .then(data => {
+                examQuestions = data.questions || [];
+                renderExamPreview();
+                setTimeout(() => {
+                    document.getElementById('examPreview').scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                }, 100);
+            });
+    };
+
+    // 新增：参数输入框实时监听刷新预览
+    [
+        'examHeader',
+        'examTitle',
+        'examSubtitle',
+        'examTime',
+        'examScore',
+        'examPass'
+    ].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', renderExamPreview);
+    });
+
+    // 3. 表单提交（生成PDF）
+    document.getElementById('examGeneratorForm').onsubmit = function (e) {
+        e.preventDefault();
+        exportExamToPDF();
+    };
+
+    // 初始清空
+    examQuestions = [];
+    renderExamPreview();
+}
+
+
+// 题目列表渲染 + 删除
+function renderExamPreview() {
+    const box = document.getElementById('examPreview');
+    const header = document.getElementById('examHeader').value.trim();
+    const title = document.getElementById('examTitle').value.trim();
+    const subtitle = document.getElementById('examSubtitle').value.trim();
+    const time = document.getElementById('examTime').value.trim();
+    const score = document.getElementById('examScore').value.trim();
+    const pass = document.getElementById('examPass').value.trim();
+
+    // 分类
+    const judgeQuestions = examQuestions.filter(q => (q.qtype === 'judge' || (!q.options || q.options.length === 2)));
+    const singleQuestions = examQuestions.filter(q => (q.qtype === 'single' || (q.options && q.options.length > 2)));
+
+    // 计算每题分值
+    const judgeTotal = 40;
+    const singleTotal = 60;
+    const judgeScore = judgeQuestions.length ? Math.round(judgeTotal / judgeQuestions.length * 100) / 100 : 0;
+    const singleScore = singleQuestions.length ? Math.round(singleTotal / singleQuestions.length * 100) / 100 : 0;
+
+    let html = `
+        <div style="font-size:22px;font-weight:600;text-align:center;">${header || '<span style="color:#bbb;">（试卷抬头）</span>'}</div>
+        <div style="font-size:26px;font-weight:bold;text-align:center;margin:18px 0 8px 0;">
+            ${title || '<span style="color:#bbb;">（试卷标题）</span>'}
+        </div>
+        <div style="font-size:17px;color:#666;text-align:center;margin-bottom:18px;">
+            ${subtitle || '<span style="color:#bbb;">（副标题）</span>'}
+        </div>
+        <div style="text-align:center;margin-bottom:18px;">
+            <span style="margin-right:22px;">考试时长：${time || '<span style="color:#bbb;">（时长）</span>'}</span>
+            <span style="margin-right:22px;">满分：${score || '<span style="color:#bbb;">（满分）</span>'}</span>
+            <span>及格线：${pass || '<span style="color:#bbb;">（及格线）</span>'}</span>
+        </div>
+        <div style="text-align:center;margin-bottom:10px;color:#888;">
+            站名：__________ &nbsp;&nbsp; 岗位：__________ &nbsp;&nbsp; 姓名：__________ &nbsp;&nbsp; 得分：__________ 
+        </div>
+        <hr style="margin:12px 0;">
+        <div id="exam-question-list">
+    `;
+
+    // 判断题
+    if (judgeQuestions.length > 0) {
+        html += `
+        <div style="font-size:18px;font-weight:600;margin-bottom:7px;margin-top:18px;">
+            一、判断题（正确打√，错误打×，每题${judgeScore}分，共${judgeTotal}分）
+        </div>
+    `;
+        judgeQuestions.forEach((q, idx) => {
+            html += `
+                <div class="exam-question-block" style="margin-bottom:14px;display:flex;align-items:flex-start;">
+                    <span style="display:inline-block;width:90px;">（   ）${idx + 1}、</span>
+                    <span style="flex:1;font-size:18px;">${q.content}</span>
+                    <button type="button" class="btn-delete" onclick="removeExamQuestionByType('judge', ${idx})" style="margin-left:22px;">删除</button>
+                </div>
+            `;
+        });
+    }
+
+    if (singleQuestions.length > 0) {
+        html += `
+        <div style="font-size:18px;font-weight:600;margin-bottom:7px;margin-top:18px;">
+            二、单项选择题（每题${singleScore}分，共${singleTotal}分）
+        </div>
+    `;
+        // 单选题渲染
+        singleQuestions.forEach((q, idx) => {
+            html += `
+                <div style="margin-bottom:22px;">
+                    <div style="display:flex;align-items:center;">
+                        <span style="font-weight:600;font-size:18px;margin-right:5px;">${idx + 1}、</span>
+                        <span style="font-size:18px;">${q.content}<span style="margin-left:6px;">（  ）</span></span>
+                        <button type="button" class="btn-delete" onclick="removeExamQuestionByType('single', ${idx})" style="margin-left:28px;">删除</button>
+                    </div>
+                    <div style="margin-left:38px;margin-top:5px;">
+                        ${q.options.map((opt, oi) =>
+                `<div style="font-size:18px;margin-bottom:4px;">
+                                <b>${String.fromCharCode(65 + oi)}、</b> ${opt}
+                            </div>`
+            ).join('')}
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    if (judgeQuestions.length === 0 && singleQuestions.length === 0) {
+        html += `<div style="color:#888;text-align:center;">（暂无题目，请先选择材料）</div>`;
+    }
+    html += `</div>`;
+
+    html += `
+        <div style="margin-top:48px; font-size:20px;">
+            <b style="display:inline-block; width:360px; margin-left:200px;">
+                阅卷人签字：<span style="border-bottom:1px dashed #888;display:inline-block;min-width:140px;">&nbsp;</span>
+            </b>
+            <b style="display:inline-block; width:240px; margin-left:300px;">
+                日期：<span style="border-bottom:1px dashed #888;display:inline-block;min-width:140px;">&nbsp;</span>
+            </b>
+        </div>
+    `;
+
+    box.innerHTML = html;
+}
+
+// 删除（分类后索引删除）
+window.removeExamQuestionByType = function (type, idx) {
+    // 找到全局 examQuestions 中第 idx 个此类型题目
+    let t = (type === 'judge') ? (q => (q.qtype === 'judge' || (!q.options || q.options.length === 2)))
+        : (q => (q.qtype === 'single' || (q.options && q.options.length > 2)));
+    let nth = -1;
+    for (let i = 0; i < examQuestions.length; i++) {
+        if (t(examQuestions[i])) {
+            nth++;
+            if (nth === idx) {
+                examQuestions.splice(i, 1);
+                break;
+            }
+        }
+    }
+    renderExamPreview();
+};
+
+// 删除题目
+window.removeExamQuestion = function (idx) {
+    examQuestions.splice(idx, 1);
+    renderExamPreview();
+};
+
+// 试卷导出接口
+function exportExamToWord() {
+    const data = {
+        header: document.getElementById('examHeader').value.trim(),
+        title: document.getElementById('examTitle').value.trim(),
+        subtitle: document.getElementById('examSubtitle').value.trim(),
+        time: document.getElementById('examTime').value.trim(),
+        score: document.getElementById('examScore').value.trim(),
+        pass: document.getElementById('examPass').value.trim(),
+        questions: examQuestions,
+    };
+    showToast('正在生成Word，请稍候…', false, true);
+    fetch('/export_exam_docx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    })
+        .then(res => res.blob())
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = (data.title || '试卷') + '.docx';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            hideToast();
+        });
+}
+
+// 替换原表单提交事件
+document.getElementById('examGeneratorForm').onsubmit = function (e) {
+    e.preventDefault();
+    exportExamToWord();
+};
 

@@ -35,6 +35,7 @@
             <a href="#training-task" onclick="navigateAndRemember('training-task')">🚀 培训发布</a>
             <a href="#training-materials" onclick="navigateAndRemember('training-materials')">📚 培训材料</a>
             <a href="#question-bank" onclick="navigateAndRemember('question-bank')">🧠 培训题库</a>
+            <a href="#exam-generator" onclick="navigateAndRemember('exam-generator')">📝 试卷生成</a>
             <a href="#training-stats" onclick="navigateAndRemember('training-stats')">📊 培训记录</a>
             <div class="sidebar-divider"></div>
 
@@ -422,6 +423,55 @@
                     </div>
                     <div id="aiGenQBankError" style="display:none;text-align:center;color:#e74c3c;margin-top:16px;">
                     </div>
+                </div>
+            </div>
+
+            <!-- 试卷生成区（A4版PDF） -->
+            <div id="exam-generator-section" style="display:none;">
+                <div class="upload-box">
+                    <h2>📝 试卷生成（A4版PDF）</h2>
+                    <form id="examGeneratorForm" style="margin-bottom: 24px;">
+                        <div class="form-group">
+                            <label for="examHeader">试卷抬头</label>
+                            <input type="text" id="examHeader" value="中国石油天然气股份有限公司上海销售沪北分公司" style="width:420px;">
+                        </div>
+                        <div class="form-group">
+                            <label for="examTitle">试卷标题</label>
+                            <input type="text" id="examTitle" placeholder="如：加油站三级安全教育考试卷" style="width:420px;">
+                        </div>
+                        <div class="form-group">
+                            <label for="examSubtitle">副标题</label>
+                            <input type="text" id="examSubtitle" placeholder="如：A册 02 岗位安全环保职责与责任清单"
+                                style="width:420px;">
+                        </div>
+                        <div class="form-group exam-info-row">
+                            <div class="exam-item">
+                                <label for="examTime">考试时长</label>
+                                <input type="text" id="examTime" value="30分钟">
+                            </div>
+                            <div class="exam-item">
+                                <label for="examScore">满分</label>
+                                <input type="text" id="examScore" value="100分">
+                            </div>
+                            <div class="exam-item">
+                                <label for="examPass">及格线</label>
+                                <input type="text" id="examPass" value="80分">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="examMaterialSelect">选择试卷材料</label>
+                            <select id="examMaterialSelect" style="width:320px;">
+                                <option value="">请选择材料</option>
+                                <!-- JS 动态填充材料选项 -->
+                            </select>
+                        </div>
+                        <button type="button" class="btn-add" onclick="exportExamToWord()">📄 生成Word</button>
+
+                    </form>
+                </div>
+                <div id="examPreview" style="background:#f5f6fa;border-radius:8px;padding:32px;min-height:600px;">
+                    <!-- JS实时填充A4预览 -->
+                    <div style="color:#888;">请先选择材料并设置参数，点击“生成试卷PDF”即可自动排版。</div>
                 </div>
             </div>
 
