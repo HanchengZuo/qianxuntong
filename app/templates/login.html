@@ -15,28 +15,31 @@
         }
 
         body {
-            width: 100vw;
-            height: 100vh;
             min-height: 100vh;
-            min-width: 100vw;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-        }
-
-        .center-box {
-            width: 100%;
-            max-width: 400px;
-            background: #fff;
-            border-radius: 16px;
-            box-shadow: 0 8px 36px 0 #2e8bff22;
-            padding: 38px 28px 30px 28px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            animation: fadeIn .7s;
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            box-sizing: border-box;
+        }
+
+        .center-box {
+            flex: 1 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 400px;
+            background: #fff;
+            border-radius: 18px;
+            box-shadow: 0 8px 36px 0 #2e8bff19, 0 2px 8px #adcbe3a8;
+            padding: 44px 34px 38px 34px;
+            margin-top: 64px;
+            margin-bottom: 64px;
+            animation: fadeIn .6s;
+            position: relative;
+            z-index: 2;
         }
 
         @keyframes fadeIn {
@@ -52,33 +55,35 @@
         }
 
         .logo {
-            font-size: 34px;
-            margin-bottom: 6px;
+            font-size: 38px;
+            margin-bottom: 10px;
             color: #2e8bff;
-            font-weight: 800;
-            letter-spacing: 1.5px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-shadow: 0 2px 8px #99ccff36;
         }
 
         .system-title {
-            font-size: 17px;
+            font-size: 15px;
             font-weight: 500;
-            letter-spacing: 1px;
-            color: #497ed6;
-            margin-bottom: 18px;
-            margin-top: -2px;
+            color: #5e7ed6;
+            letter-spacing: 1.2px;
+            margin-bottom: 24px;
+            opacity: 0.85;
         }
 
         h2 {
             margin-top: 0;
-            font-size: 26px;
+            font-size: 25px;
             font-weight: 700;
-            color: #1d2d41;
-            margin-bottom: 22px;
+            color: #174287;
+            margin-bottom: 24px;
+            letter-spacing: 1px;
         }
 
         .form-area {
             width: 100%;
-            max-width: 344px;
+            max-width: 350px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -87,68 +92,71 @@
         label {
             display: block;
             font-weight: 500;
-            color: #222;
-            margin-bottom: 7px;
-            margin-top: 16px;
+            color: #234;
+            margin-bottom: 8px;
+            margin-top: 20px;
             width: 100%;
             text-align: left;
+            letter-spacing: 0.5px;
         }
 
         input[type="text"],
         input[type="password"] {
             width: 100%;
             box-sizing: border-box;
-            padding: 13px;
-            border-radius: 8px;
+            padding: 14px;
+            border-radius: 10px;
             border: 1.5px solid #e3e7ed;
-            font-size: 16px;
-            transition: border .2s;
-            margin-bottom: 5px;
-            background: #f6faff;
+            font-size: 17px;
+            margin-bottom: 7px;
+            background: #f7fbff;
+            transition: border .2s, box-shadow .2s;
         }
 
         input:focus {
             outline: none;
             border: 1.5px solid #2e8bff;
+            box-shadow: 0 0 0 2px #b5e3ff55;
             background: #f0f8ff;
         }
 
         button {
             width: 100%;
-            box-sizing: border-box;
-            padding: 13px;
-            margin-top: 28px;
-            background: linear-gradient(90deg, #2e8bff 70%, #51aaff 100%);
+            padding: 14px;
+            margin-top: 30px;
+            background: linear-gradient(90deg, #2e8bff 70%, #6ec3f9 100%);
             color: #fff;
             border: none;
-            border-radius: 8px;
-            font-size: 18px;
-            font-weight: 600;
-            box-shadow: 0 2px 12px #2e8bff1a;
+            border-radius: 9px;
+            font-size: 19px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            box-shadow: 0 2px 16px #2e8bff22;
             cursor: pointer;
-            transition: background .2s, box-shadow .2s;
+            transition: background .2s, box-shadow .2s, transform .1s;
         }
 
-        button:hover {
-            background: linear-gradient(90deg, #166fd9 80%, #338fff 100%);
-            box-shadow: 0 4px 18px #2e8bff2e;
+        button:active {
+            transform: scale(0.97);
+            background: linear-gradient(90deg, #1873ca 70%, #49aaff 100%);
         }
 
         .to-register {
-            margin-top: 22px;
+            margin-top: 24px;
             text-align: center;
-            color: #778aa8;
-            font-size: 15px;
+            color: #7d98b8;
+            font-size: 16px;
         }
 
         .to-register a {
             color: #2e8bff;
             text-decoration: underline;
             margin-left: 4px;
+            transition: color .15s;
         }
 
         .to-register a:hover {
-            color: #166fd9;
+            color: #174287;
         }
 
         .success-tip {
@@ -174,20 +182,52 @@
             margin-bottom: 18px;
         }
 
-        @media (max-width: 500px) {
+        footer {
+            flex-shrink: 0;
+            text-align: center;
+            color: #aaa;
+            font-size: 14px;
+            padding: 20px 0 12px 0;
+            background: rgba(255, 255, 255, 0.98);
+            width: 100vw;
+            border-top: 1px solid #f2f4f7;
+            box-shadow: 0 -2px 12px #b6cdfd0c;
+            letter-spacing: 0.5px;
+            position: relative;
+            z-index: 1;
+        }
+
+        footer a {
+            color: #888;
+            text-decoration: none;
+            border-bottom: 1px dotted #cce;
+            transition: color .18s, border-bottom-color .18s;
+        }
+
+        footer a:hover {
+            color: #1d70d6;
+            border-bottom: 1px solid #1d70d6;
+        }
+
+        @media (max-width: 600px) {
             .center-box {
-                max-width: 95vw;
-                padding: 30px 8vw 24px 8vw;
-                border-radius: 0;
-                box-shadow: none;
+                max-width: 98vw;
+                padding: 26px 4vw 16px 4vw;
+                margin: 24px 0 54px 0;
+                border-radius: 10px;
+                box-shadow: 0 2px 16px #2e8bff13;
             }
 
             .form-area {
-                max-width: 100vw;
+                max-width: 96vw;
             }
 
             .logo {
-                font-size: 26px;
+                font-size: 25px;
+            }
+
+            h2 {
+                font-size: 20px;
             }
         }
     </style>
@@ -215,6 +255,10 @@
         </form>
         <div class="to-register">没有账号？<a href="/register">注册</a></div>
     </div>
+    <footer>
+        © 2025 签训通 qianxuntong.xyz |
+        <a href="https://beian.miit.gov.cn/" target="_blank">沪ICP备2025130703号-1</a>
+    </footer>
 </body>
 
 </html>

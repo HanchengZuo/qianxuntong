@@ -6,19 +6,33 @@
     <meta charset="utf-8">
     <style>
         body {
-            font-family: "Helvetica Neue", Arial, sans-serif;
-            background-color: #f7f9fc;
-            padding: 40px;
-            color: #333;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            background: #f7f9fc;
+        }
+
+        .page-wrapper {
+            flex: 1 0 auto;
+            display: flex;
+            align-items: center;
+            /* 垂直居中 */
+            justify-content: center;
+            /* 水平居中 */
+            min-height: 60vh;
+            /* 保证内容不至于太贴底部 */
         }
 
         .container {
             max-width: 700px;
-            margin: auto;
+            width: 100%;
             background: #fff;
             padding: 30px 40px;
             border-radius: 10px;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            /* 保持原有内容样式 */
         }
 
         h2 {
@@ -81,34 +95,63 @@
             color: red;
             font-weight: bold;
         }
+
+        .main-footer {
+            width: 100%;
+            min-height: 32px;
+            background: rgba(255, 255, 255, 0.97);
+            color: #888;
+            font-size: 15px;
+            text-align: center;
+            padding: 22px 0 16px 0;
+            margin: 0;
+            border-top: 1.5px solid #e7eaf3;
+            box-shadow: 0 -2px 18px #2e8bff11;
+            letter-spacing: 1px;
+            flex-shrink: 0;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 16px 4vw;
+            }
+        }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <h2>签名任务已创建 ✅</h2>
-        <p>👇 请将以下链接发送到工作群，员工点击后可选择身份签名：</p>
+    <div class="page-wrapper">
+        <div class="container">
+            <h2>签名任务已创建 ✅</h2>
+            <p>👇 请将以下链接发送到工作群，员工点击后可选择身份签名：</p>
 
-        <div class="link-box">
-            <input type="text" class="copy-input" id="signLinkInput" value="{{ sign_url }}" readonly
-                onclick="this.select()">
-            <button class="copy-btn" onclick="copyLink()">复制</button>
+            <div class="link-box">
+                <input type="text" class="copy-input" id="signLinkInput" value="{{ sign_url }}" readonly
+                    onclick="this.select()">
+                <button class="copy-btn" onclick="copyLink()">复制</button>
+            </div>
+
+            <h3>签名员工列表</h3>
+            <ul>
+                {% for emp in employees %}
+                <li>
+                    {{ emp.name }} -
+                    {% if emp.id in signed_ids %}
+                    <span class="signed">已签名 ✅</span>
+                    {% else %}
+                    <span class="unsigned">未签名</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
         </div>
-
-        <h3>签名员工列表</h3>
-        <ul>
-            {% for emp in employees %}
-            <li>
-                {{ emp.name }} -
-                {% if emp.id in signed_ids %}
-                <span class="signed">已签名 ✅</span>
-                {% else %}
-                <span class="unsigned">未签名</span>
-                {% endif %}
-            </li>
-            {% endfor %}
-        </ul>
     </div>
+    <footer class="main-footer">
+        © 2025 签训通 qianxuntong.xyz |
+        <a href="https://beian.miit.gov.cn/" target="_blank" style="color:#888;text-decoration:none;">
+            沪ICP备2025130703号-1
+        </a>
+    </footer>
 
     <script>
         function copyLink() {

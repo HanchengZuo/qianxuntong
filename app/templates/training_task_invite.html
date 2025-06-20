@@ -4,17 +4,35 @@
 <head>
     <meta charset="UTF-8">
     <title>培训任务已发布 ✅</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
     <style>
+        html,
         body {
-            font-family: "Helvetica Neue", Arial, sans-serif;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
             background-color: #f7f9fc;
-            padding: 40px;
             color: #333;
+            font-family: "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .page-wrapper {
+            flex: 1 0 auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            /* 让内容垂直居中可选 */
         }
 
         .container {
-            max-width: 700px;
-            margin: auto;
+            width: 40%;
+            margin: 40px auto;
             background: #fff;
             padding: 30px 40px;
             border-radius: 10px;
@@ -81,48 +99,109 @@
             color: red;
             font-weight: bold;
         }
+
+        .main-footer {
+            width: 100vw;
+            background: rgba(255, 255, 255, 0.97);
+            color: #888;
+            font-size: 15px;
+            text-align: center;
+            padding: 22px 0 16px 0;
+            border-top: 1.5px solid #e7eaf3;
+            box-shadow: 0 -2px 18px #2e8bff11;
+            letter-spacing: 1px;
+            flex-shrink: 0;
+        }
+
+        .footer-break {
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                max-width: 97vw;
+                padding: 6vw 2vw 6vw 2vw;
+                border-radius: 3vw;
+                box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+                margin: 4vw 0;
+            }
+
+            .main-footer {
+                font-size: 13px;
+                padding: 16px 0 10px 0;
+                line-height: 1.65;
+            }
+
+            .footer-break {
+                display: inline;
+            }
+
+            .link-box {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            input.copy-input {
+                font-size: 15px;
+            }
+        }
+
+        @media (min-width: 601px) {
+            .footer-break {
+                display: none;
+            }
+        }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <h2>培训任务已发布 ✅</h2>
-        <p>👇 请将以下链接发送到员工群，员工点击后选择身份进行答题：</p>
-        <div class="link-box">
-            <input type="text" class="copy-input" id="trainingLinkInput"
-                value="{{ base_url }}/training_answer_select/{{ task.id }}" readonly onclick="this.select()">
-            <button class="copy-btn" onclick="copyLink()">复制</button>
-        </div>
+    <div class="page-wrapper">
+        <div class="container">
+            <h2>培训任务已发布 ✅</h2>
+            <p>👇 请将以下链接发送到员工群，员工点击后选择身份进行答题：</p>
+            <div class="link-box">
+                <input type="text" class="copy-input" id="trainingLinkInput"
+                    value="{{ base_url }}/training_answer_select/{{ task.id }}" readonly onclick="this.select()">
+                <button class="copy-btn" onclick="copyLink()">复制</button>
+            </div>
 
-        <h3>答题进度</h3>
-        <ul>
-            {% for emp in employees %}
-            <li>
-                {{ emp.name }} -
-                {% if emp.status == "已完成" %}
-                <span class="done">已完成 ✅</span>
-                {% else %}
-                <span class="todo">未完成</span>
-                {% endif %}
-                {% if histories[emp.id] %}
-                <ul style="margin:6px 0 4px 26px;color:#888;font-size:14px;">
-                    {% for h in histories[emp.id] %}
-                    <li>
-                        第{{ loop.index }}次: {{ h.score }}分
-                        {% if h.is_passed %}
-                        （通过）
-                        {% else %}
-                        （未通过）
-                        {% endif %}
-                        [{{ h.submit_time }}]
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% endif %}
-            </li>
-            {% endfor %}
-        </ul>
+            <h3>答题进度</h3>
+            <ul>
+                {% for emp in employees %}
+                <li>
+                    {{ emp.name }} -
+                    {% if emp.status == "已完成" %}
+                    <span class="done">已完成 ✅</span>
+                    {% else %}
+                    <span class="todo">未完成</span>
+                    {% endif %}
+                    {% if histories[emp.id] %}
+                    <ul style="margin:6px 0 4px 26px;color:#888;font-size:14px;">
+                        {% for h in histories[emp.id] %}
+                        <li>
+                            第{{ loop.index }}次: {{ h.score }}分
+                            {% if h.is_passed %}
+                            （通过）
+                            {% else %}
+                            （未通过）
+                            {% endif %}
+                            [{{ h.submit_time }}]
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
     </div>
+    <footer class="main-footer">
+        <span>© 2025 签训通 qianxuntong.xyz</span>
+        <br class="footer-break">
+        <a href="https://beian.miit.gov.cn/" target="_blank" style="color:#888;text-decoration:none;">
+            沪ICP备2025130703号-1
+        </a>
+    </footer>
     <script>
         function copyLink() {
             const input = document.getElementById("trainingLinkInput");

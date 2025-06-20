@@ -15,28 +15,30 @@
         }
 
         body {
-            width: 100vw;
-            height: 100vh;
             min-height: 100vh;
-            min-width: 100vw;
+            margin: 0;
+            padding: 0;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: center;
-            overflow: hidden;
+            justify-content: flex-start;
             font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
         }
 
         .center-box {
+            flex: 1 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             width: 100%;
             max-width: 400px;
             background: #fff;
             border-radius: 16px;
             box-shadow: 0 8px 36px 0 #2e8bff22;
             padding: 38px 28px 30px 28px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            animation: fadeIn .7s;
+            margin-top: 50px;
+            margin-bottom: 60px;
         }
 
         @keyframes fadeIn {
@@ -151,6 +153,18 @@
             color: #166fd9;
         }
 
+        .success-tip {
+            color: #27ae60;
+            background: #eafbe7;
+            border: 1px solid #b9eab7;
+            border-radius: 7px;
+            margin-bottom: 12px;
+            padding: 10px;
+            width: 100%;
+            text-align: center;
+            font-size: 15px;
+        }
+
         .error-tip {
             background: #ffebee;
             color: #e53935;
@@ -178,6 +192,16 @@
                 font-size: 26px;
             }
         }
+
+        footer {
+            flex-shrink: 0;
+            text-align: center;
+            color: #888;
+            font-size: 14px;
+            padding: 18px 0;
+            background: rgba(255, 255, 255, 0.97);
+            width: 100vw;
+        }
     </style>
 </head>
 
@@ -188,6 +212,9 @@
             <div class="system-title">智能签名与培训答题系统</div>
         </div>
         <h2>注册新账号</h2>
+        {% if msg %}
+        <div class="success-tip">{{ msg }}</div>
+        {% endif %}
         {% if error %}
         <div class="error-tip">{{ error }}</div>
         {% endif %}
@@ -202,6 +229,12 @@
             已有账号？<a href="/login">去登录</a>
         </div>
     </div>
+    <footer>
+        © 2025 签训通 qianxuntong.xyz |
+        <a href="https://beian.miit.gov.cn/" target="_blank" style="color:#888;text-decoration:none;">
+            沪ICP备2025130703号-1
+        </a>
+    </footer>
 </body>
 
 </html>

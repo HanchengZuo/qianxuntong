@@ -32,7 +32,7 @@
             width: 100%;
             max-width: 900px;
             /* ⭐ PC端最大宽度 */
-            margin: 24px auto 0 auto;
+            margin: 10px auto;
             background: white;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             position: relative;
@@ -172,7 +172,7 @@
             }
 
             .pdf-container {
-                margin: 12px 0;
+                margin: 10px auto;
             }
 
             .btn-bar {
@@ -211,6 +211,37 @@
                 max-width: 98vw;
                 /* 小屏自动自适应 */
             }
+
+            .pdf-container {
+                margin: 10px auto;
+            }
+        }
+
+        .main-footer {
+            width: 100vw;
+            min-height: 32px;
+            background: rgba(255, 255, 255, 0.97);
+            color: #888;
+            font-size: 15px;
+            text-align: center;
+            padding: 22px 0 16px 0;
+            margin: 0;
+            border-top: 1.5px solid #e7eaf3;
+            box-shadow: 0 -2px 18px #2e8bff11;
+            letter-spacing: 1px;
+            flex-shrink: 0;
+            line-height: 1.5;
+        }
+
+        .main-footer .beian {
+            display: inline;
+        }
+
+        @media (max-width: 480px) {
+            .main-footer span.beian {
+                display: block;
+                margin-top: 2px;
+            }
         }
     </style>
 </head>
@@ -235,6 +266,16 @@
         <button type="button" class="btn-submit" onclick="submitSignature()">✅ 提交签名</button>
         {% endif %}
     </div>
+
+    <footer class="main-footer">
+        <span>© 2025 签训通 qianxuntong.xyz |</span>
+        <span class="beian">
+            <a href="https://beian.miit.gov.cn/" target="_blank" style="color:#888;text-decoration:none;">
+                沪ICP备2025130703号-1
+            </a>
+        </span>
+    </footer>
+
 
     <script>
         function gotoQuiz() {

@@ -871,3 +871,25 @@ textarea:focus {
     font-size: 16px;
     margin-bottom: 0;
 }
+
+.main-footer {
+    width: 100vw;
+    min-height: 32px;
+    background: rgba(255, 255, 255, 0.97);
+    color: #888;
+    font-size: 15px;
+    text-align: center;
+    padding: 22px 0 16px 0;
+    margin: 0;
+    border-top: 1.5px solid #e7eaf3;
+    box-shadow: 0 -2px 18px #2e8bff11;
+    letter-spacing: 1px;
+    /* 适配窄屏 */
+}
+
+@media (max-width: 600px) {
+    .main-footer {
+        font-size: 13px;
+        padding: 18px 0 12px 0;
+    }
+}

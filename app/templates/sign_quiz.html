@@ -10,6 +10,16 @@
             background-color: #f4f6f9;
             margin: 0;
             padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .page-wrapper {
+            flex: 1 0 auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center; /* 可选：内容垂直居中 */
         }
 
         .container {
@@ -141,37 +151,76 @@
                 display: block;
             }
         }
+
+        .main-footer {
+            width: 100vw;
+            background: rgba(255,255,255,0.97);
+            color: #888;
+            font-size: 15px;
+            text-align: center;
+            padding: 22px 0 16px 0;
+            border-top: 1.5px solid #e7eaf3;
+            box-shadow: 0 -2px 18px #2e8bff11;
+            letter-spacing: 1px;
+            flex-shrink: 0;
+            margin-top: 0;
+        }
+        
+        @media (max-width: 600px) {
+            .main-footer {
+                font-size: 13px;
+                padding: 16px 0 10px 0;
+                line-height: 1.65;
+            }
+            .footer-break {
+                display: inline;
+            }
+        }
+        @media (min-width: 601px) {
+            .footer-break {
+                display: none;
+            }
+        }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="top-bar">
-            <h2>请完成答题后进入签名</h2>
-            <button class="btn-back" onclick="goBackToPDF()">⬅ 返回阅读PDF</button>
-        </div>
-        <div id="quiz-error"
-            style="display:none;color:#e74c3c; background:#fff0f0; border:1px solid #e74c3c; padding:10px; border-radius:6px; margin-bottom:18px; text-align:center;">
-        </div>
-
-        <form method="POST" id="quiz-form">
-            {% for q in questions %}
-            <div class="question-block">
-                <div class="question-title">Q{{ loop.index }}：{{ q.content }}</div>
-                <div class="note">（单选）</div>
-                {% for opt in q.options %}
-                <div class="option">
-                    <label>
-                        <input type="radio" name="q{{ q.id }}" value="{{ loop.index0 }}">
-                        {{ ['A','B','C','D','E','F','G','H','I','J'][loop.index0] }}. {{ opt }}
-                    </label>
+    <div class="page-wrapper">
+            <div class="container">
+                <div class="top-bar">
+                    <h2>请完成答题后进入签名</h2>
+                    <button class="btn-back" onclick="goBackToPDF()">⬅ 返回阅读PDF</button>
                 </div>
-                {% endfor %}
+                <div id="quiz-error"
+                    style="display:none;color:#e74c3c; background:#fff0f0; border:1px solid #e74c3c; padding:10px; border-radius:6px; margin-bottom:18px; text-align:center;">
+                </div>
+
+                <form method="POST" id="quiz-form">
+                    {% for q in questions %}
+                    <div class="question-block">
+                        <div class="question-title">Q{{ loop.index }}：{{ q.content }}</div>
+                        <div class="note">（单选）</div>
+                        {% for opt in q.options %}
+                        <div class="option">
+                            <label>
+                                <input type="radio" name="q{{ q.id }}" value="{{ loop.index0 }}">
+                                {{ ['A','B','C','D','E','F','G','H','I','J'][loop.index0] }}. {{ opt }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                    <button type="button" class="submit-btn" id="quiz-submit-btn">✅ 提交并进入签名</button>
+                </form>
             </div>
-            {% endfor %}
-            <button type="button" class="submit-btn" id="quiz-submit-btn">✅ 提交并进入签名</button>
-        </form>
     </div>
+    <footer class="main-footer">
+        <span>© 2025 签训通 qianxuntong.xyz</span>
+        <br class="footer-break">
+        <a href="https://beian.miit.gov.cn/" target="_blank" style="color:#888;text-decoration:none;">
+            沪ICP备2025130703号-1
+        </a>
+    </footer>
 
     <!-- jQuery CDN -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

@@ -65,6 +65,41 @@
                 transform: translateY(0);
             }
         }
+
+        .main-footer {
+            width: 100vw;
+            background: rgba(255, 255, 255, 0.97);
+            color: #888;
+            font-size: 15px;
+            text-align: center;
+            padding: 22px 0 16px 0;
+            border-top: 1.5px solid #e7eaf3;
+            box-shadow: 0 -2px 18px #2e8bff11;
+            letter-spacing: 1px;
+            flex-shrink: 0;
+            margin-top: 0;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+        }
+
+        @media (max-width: 600px) {
+            .main-footer {
+                font-size: 13px;
+                padding: 16px 0 10px 0;
+                line-height: 1.65;
+            }
+
+            .footer-break {
+                display: inline;
+            }
+        }
+
+        @media (min-width: 601px) {
+            .footer-break {
+                display: none;
+            }
+        }
     </style>
 </head>
 
@@ -75,6 +110,13 @@
         <p>感谢您的签名，您可以关闭此页面。</p>
         <button class="close-btn" onclick="window.close()">关闭页面</button>
     </div>
+    <footer class="main-footer">
+        <span>© 2025 签训通 qianxuntong.xyz</span>
+        <br class="footer-break">
+        <a href="https://beian.miit.gov.cn/" target="_blank" style="color:#888;text-decoration:none;">
+            沪ICP备2025130703号-1
+        </a>
+    </footer>
 </body>
 
 </html>

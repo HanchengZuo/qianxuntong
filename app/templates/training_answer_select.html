@@ -7,13 +7,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
             font-family: sans-serif;
             background-color: #f9f9f9;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
+        }
+
+        .page-wrapper {
+            flex: 1 0 auto;
+            display: flex;
             align-items: center;
-            height: 100vh;
-            margin: 0;
+            justify-content: center;
+            min-height: 60vh;
         }
 
         .form-box {
@@ -64,6 +72,26 @@
             line-height: 1.4;
         }
 
+        .main-footer {
+            width: 100vw;
+            min-height: 32px;
+            background: rgba(255, 255, 255, 0.97);
+            color: #888;
+            font-size: 15px;
+            text-align: center;
+            padding: 22px 0 16px 0;
+            margin: 0;
+            border-top: 1.5px solid #e7eaf3;
+            box-shadow: 0 -2px 18px #2e8bff11;
+            letter-spacing: 1px;
+            flex-shrink: 0;
+            line-height: 1.5;
+        }
+
+        .main-footer .beian {
+            display: inline;
+        }
+
         @media (max-width: 480px) {
             .form-box {
                 padding: 18px 6vw;
@@ -81,22 +109,45 @@
             button {
                 font-size: 15.5px;
             }
+
+            .main-footer {
+                font-size: 13px;
+                padding: 18px 0 12px 0;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .main-footer span.beian {
+                display: block;
+                margin-top: 2px;
+                /* 可选：加个小距离 */
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="form-box">
-        <h2>请选择您的身份进行培训答题</h2>
-        <form method="POST" action="/training_answer_select/{{ task.id }}">
-            <select name="employee_id" required>
-                {% for emp in employees %}
-                <option value="{{ emp.id }}">{{ emp.name }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit">✅ 进入答题</button>
-        </form>
+    <div class="page-wrapper">
+        <div class="form-box">
+            <h2>请选择您的身份进行培训答题</h2>
+            <form method="POST" action="/training_answer_select/{{ task.id }}">
+                <select name="employee_id" required>
+                    {% for emp in employees %}
+                    <option value="{{ emp.id }}">{{ emp.name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit">✅ 进入答题</button>
+            </form>
+        </div>
     </div>
+    <footer class="main-footer">
+        <span>© 2025 签训通 qianxuntong.xyz |</span>
+        <span class="beian">
+            <a href="https://beian.miit.gov.cn/" target="_blank" style="color:#888;text-decoration:none;">
+                沪ICP备2025130703号-1
+            </a>
+        </span>
+    </footer>
 </body>
 
 </html>

@@ -9,18 +9,23 @@
         html,
         body {
             height: 100%;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-            background: #f7f9fc;
-            margin: 0;
-            padding: 0;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            background: #f7f9fc;
+        }
+
+        .page-wrapper {
+            flex: 1 0 auto;
+            display: flex;
             align-items: center;
+            justify-content: center;
         }
 
         .container {
@@ -82,6 +87,23 @@
             background: #166fd9;
         }
 
+        .main-footer {
+            width: 100vw;
+            background: rgba(255, 255, 255, 0.97);
+            color: #888;
+            font-size: 15px;
+            text-align: center;
+            padding: 22px 0 16px 0;
+            border-top: 1.5px solid #e7eaf3;
+            box-shadow: 0 -2px 18px #2e8bff11;
+            letter-spacing: 1px;
+            flex-shrink: 0;
+        }
+
+        .footer-break {
+            display: none;
+        }
+
         @media (max-width: 480px) {
             .container {
                 max-width: 99vw;
@@ -92,24 +114,49 @@
             .info {
                 width: 100%;
             }
+
+            .main-footer {
+                font-size: 13px;
+                padding: 16px 0 10px 0;
+                line-height: 1.65;
+            }
+
+            .footer-break {
+                display: inline;
+            }
+        }
+
+        @media (min-width: 481px) {
+            .footer-break {
+                display: none;
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <span class="icon-warning">🚫</span>
-        <div class="msg">{{ msg }}</div>
-        {% if score is defined %}
-        <div class="info">
-            <div>答题得分：<b style="color:#2e8b57;">{{ score }}</b></div>
-            <div>共尝试：<b>{{ attempts }}</b> 次</div>
-            <div>通过：<b style="color:{{ 'green' if is_passed else '#e26b37' }};">{{ "是" if is_passed else "否" }}</b>
+    <div class="page-wrapper">
+        <div class="container">
+            <span class="icon-warning">🚫</span>
+            <div class="msg">{{ msg }}</div>
+            {% if score is defined %}
+            <div class="info">
+                <div>答题得分：<b style="color:#2e8b57;">{{ score }}</b></div>
+                <div>共尝试：<b>{{ attempts }}</b> 次</div>
+                <div>通过：<b style="color:{{ 'green' if is_passed else '#e26b37' }};">{{ "是" if is_passed else "否" }}</b>
+                </div>
             </div>
+            {% endif %}
+            <button class="close-btn" onclick="closePage()">关闭页面</button>
         </div>
-        {% endif %}
-        <button class="close-btn" onclick="closePage()">关闭页面</button>
     </div>
+    <footer class="main-footer">
+        <span>© 2025 签训通 qianxuntong.xyz</span>
+        <br class="footer-break">
+        <a href="https://beian.miit.gov.cn/" target="_blank" style="color:#888;text-decoration:none;">
+            沪ICP备2025130703号-1
+        </a>
+    </footer>
     <script>
         function closePage() {
             // 微信小程序/公众号
