@@ -35,6 +35,9 @@ app/static/training_materials/*
 app/static/pdf_images/*
 !app/static/pdf_images/.gitkeep
 
+app/static/material_images/*
+!app/static/material_images/.gitkeep
+
 
 
 # 保留每个子文件夹，但忽略其内容
