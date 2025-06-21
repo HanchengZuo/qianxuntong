@@ -223,37 +223,60 @@
         let isDrawing = false;
         let hasSigned = false;
 
-        // 自适应设置canvas实际尺寸
+        // 自适应设置canvas实际尺寸，并保留现有签名
         function resizeCanvas() {
-            // 物理像素适配，确保高清屏也清晰
-            const devicePixelRatio = window.devicePixelRatio || 1;
-            const style = getComputedStyle(canvas);
-            const width = parseInt(style.width, 10);
-            const height = parseInt(style.height, 10);
-            canvas.width = width * devicePixelRatio;
-            canvas.height = height * devicePixelRatio;
-            ctx.setTransform(1, 0, 0, 1, 0, 0); // 重置变换
-            ctx.scale(devicePixelRatio, devicePixelRatio);
-            clearCanvas();
-        }
-        window.addEventListener("resize", resizeCanvas);
-        window.addEventListener("orientationchange", resizeCanvas);
-        window.onload = resizeCanvas;
-
-        function getPointerPos(e) {
-            const rect = canvas.getBoundingClientRect();
-            if (e.touches) {
-                return {
-                    x: (e.touches[0].clientX - rect.left),
-                    y: (e.touches[0].clientY - rect.top)
-                }
-            } else {
-                return {
-                    x: (e.offsetX !== undefined) ? e.offsetX : (e.clientX - rect.left),
-                    y: (e.offsetY !== undefined) ? e.offsetY : (e.clientY - rect.top)
-                }
+            // 只读取CSS宽高（clientWidth/Height）
+            const cssWidth = canvas.clientWidth;
+            const cssHeight = canvas.clientHeight;
+            const dpr = window.devicePixelRatio || 1;
+            // 保存已有内容
+            let prevImg = null;
+            if (canvas.width > 0 && canvas.height > 0) {
+                prevImg = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            }
+            // 设置物理像素宽高
+            canvas.width = cssWidth * dpr;
+            canvas.height = cssHeight * dpr;
+            // 缩放坐标系
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = "#222";
+            // 恢复签名内容
+            if (prevImg && prevImg.width && prevImg.height) {
+                ctx.putImageData(prevImg, 0, 0);
             }
         }
+
+        // 落点坐标始终以 clientX/clientY 为基准，映射到canvas坐标
+        function getPointerPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+            if (e.touches) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            // 映射到canvas像素坐标（和缩放/高分屏无关，保证一致）
+            const x = (clientX - rect.left) * (canvas.width / rect.width);
+            const y = (clientY - rect.top) * (canvas.height / rect.height);
+            // 但我们已经scale了dpr，所以其实只要按CSS像素即可
+            const dpr = window.devicePixelRatio || 1;
+            return {
+                x: (clientX - rect.left),
+                y: (clientY - rect.top)
+            };
+        }
+
+        window.addEventListener("resize", resizeCanvas);
+        window.addEventListener("orientationchange", resizeCanvas);
+        window.onload = () => { resizeCanvas(); checkOrientation(); };
+
+        // 鼠标事件
         canvas.addEventListener("mousedown", e => {
             isDrawing = true;
             hasSigned = true;
@@ -270,6 +293,7 @@
         canvas.addEventListener("mouseup", () => isDrawing = false);
         canvas.addEventListener("mouseleave", () => isDrawing = false);
 
+        // 触摸事件
         canvas.addEventListener("touchstart", e => {
             e.preventDefault();
             isDrawing = true;
@@ -296,13 +320,14 @@
                 alert("⚠️ 请先签名再确认");
                 return;
             }
+            // 导出前，建议不再缩放，只导出原canvas的内容
             const dataURL = canvas.toDataURL("image/png");
             localStorage.setItem(`signature_image_${taskId}_${employeeId}`, dataURL);
             alert("✅ 签名已保存");
             window.location.href = `/sign/${taskId}/${employeeId}`;
         }
+
         function isMobile() {
-            // 简单判断是否为移动端
             return /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         }
 
@@ -323,9 +348,9 @@
         }
         window.addEventListener("orientationchange", checkOrientation);
         window.addEventListener("resize", checkOrientation);
-        window.onload = checkOrientation;
 
     </script>
+
 </body>
 
 </html>
