@@ -636,10 +636,13 @@ def sign_page(task_id):
 # 签名提交API，保存签名图、状态并自动合成PDF
 @app.route("/submit_sign/<task_id>", methods=["POST"])
 def submit_sign(task_id):
-    task = SignatureTask.query.filter_by(
-        user_id=current_user.id, task_id=task_id
-    ).first()
-    if task and task.is_completed:
+    # 先通过task_id拿到task（不依赖登录态）
+    task = SignatureTask.query.filter_by(task_id=task_id).first()
+    if not task:
+        return jsonify({"status": "error", "msg": "签名任务不存在"})
+    user_id = task.user_id
+
+    if task.is_completed:
         return (
             render_template(
                 "message.html",
@@ -682,7 +685,7 @@ def submit_sign(task_id):
 
     # 更新数据库中的签名状态
     sig_status = SignatureStatus.query.filter_by(
-        user_id=current_user.id, task_id=task_id, employee_id=int(employee_id)
+        user_id=user_id, task_id=task_id, employee_id=int(employee_id)
     ).first()
     if sig_status and not sig_status.signed:
         sig_status.signed = True
@@ -690,11 +693,11 @@ def submit_sign(task_id):
 
     # 检查是否所有人都签完，才触发合成 PDF
     all_statuses = SignatureStatus.query.filter_by(
-        user_id=current_user.id, task_id=task_id
+        user_id=user_id, task_id=task_id
     ).all()
     if all(s.signed for s in all_statuses):
 
-        user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(current_user.id))
+        user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(user_id))
         pdf_path = next(
             (f for f in os.listdir(user_folder) if f.startswith(task_id)),
             None,
@@ -703,9 +706,7 @@ def submit_sign(task_id):
             return jsonify({"status": "error", "msg": "PDF 未找到"})
 
         full_pdf_path = os.path.join(user_folder, pdf_path)
-        final_user_folder = os.path.join(
-            app.config["FINAL_FOLDER"], str(current_user.id)
-        )
+        final_user_folder = os.path.join(app.config["FINAL_FOLDER"], str(user_id))
         os.makedirs(final_user_folder, exist_ok=True)
         output_pdf_path = os.path.join(final_user_folder, f"{task_id}_signed.pdf")
 
@@ -838,10 +839,18 @@ def delete_record(task_id):
 # 签名前选择员工身份页面
 @app.route("/sign_select/<task_id>", methods=["GET", "POST"])
 def sign_select(task_id):
-    task = SignatureTask.query.filter_by(
-        user_id=current_user.id, task_id=task_id
-    ).first()
-    if task and task.is_completed:
+    task = SignatureTask.query.filter_by(task_id=task_id).first()
+    if not task:
+        return (
+            render_template(
+                "message.html",
+                title="无法签名",
+                msg="未找到该签名任务",
+                btn_text="关闭页面",
+            ),
+            404,
+        )
+    if task.is_completed:
         return (
             render_template(
                 "message.html",
@@ -851,6 +860,8 @@ def sign_select(task_id):
             ),
             403,
         )
+
+    user_id = task.user_id
 
     if request.method == "POST":
         employee_id = request.form.get("employee_id")
@@ -862,7 +873,7 @@ def sign_select(task_id):
     box_emps = SignatureBox.query.filter_by(task_id=task_id).all()
     employee_ids = set(b.employee_id for b in box_emps)
     employees = (
-        Employee.query.filter_by(user_id=current_user.id)
+        Employee.query.filter(Employee.user_id == user_id)
         .filter(Employee.id.in_(employee_ids))
         .all()
     )
@@ -874,9 +885,7 @@ def sign_select(task_id):
 @app.route("/sign/<task_id>/<int:employee_id>")
 def sign_page_employee(task_id, employee_id):
     # ✅ 获取任务
-    task = SignatureTask.query.filter_by(
-        user_id=current_user.id, task_id=task_id
-    ).first()
+    task = SignatureTask.query.filter_by(task_id=task_id).first()
     if not task:
         return (
             render_template(
@@ -890,7 +899,7 @@ def sign_page_employee(task_id, employee_id):
 
     # ✅ 检查是否任务已完成
     status = SignatureStatus.query.filter_by(
-        user_id=current_user.id, task_id=task_id, employee_id=employee_id
+        user_id=task.user_id, task_id=task_id, employee_id=employee_id
     ).first()
     if status and status.signed:
         return (
@@ -903,7 +912,6 @@ def sign_page_employee(task_id, employee_id):
             403,
         )
 
-    # ✅ 获取 quiz 状态，前端判断是否允许签名，不再强制跳 quiz
     quiz_passed = status.quiz_passed if status else False
 
     # ✅ 直接查 SignatureBox 表，获取当前员工所有签名区域
@@ -932,7 +940,7 @@ def sign_page_employee(task_id, employee_id):
         )
 
     # ✅ 获取上传的 PDF 文件名并 URL 编码
-    user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(current_user.id))
+    user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(task.user_id))
     uploaded_filename = next(
         (f for f in os.listdir(user_folder) if f.startswith(task_id)),
         None,
@@ -949,7 +957,7 @@ def sign_page_employee(task_id, employee_id):
         )
 
     encoded_title = quote(uploaded_filename)
-    employee = Employee.query.filter_by(user_id=current_user.id, id=employee_id).first()
+    employee = Employee.query.filter_by(user_id=task.user_id, id=employee_id).first()
     employee_name = employee.name if employee else ""
 
     return render_template(
@@ -1352,9 +1360,8 @@ def ai_generate_questions():
 # 员工签名前答题入口，答题通过后允许签名
 @app.route("/sign_quiz/<task_id>/<int:employee_id>", methods=["GET", "POST"])
 def quiz_page(task_id, employee_id):
-    task = SignatureTask.query.filter_by(
-        user_id=current_user.id, task_id=task_id
-    ).first()
+    # 1. 查询任务（不用 current_user）
+    task = SignatureTask.query.filter_by(task_id=task_id).first()
     if not task:
         return (
             render_template(
@@ -1366,12 +1373,12 @@ def quiz_page(task_id, employee_id):
             404,
         )
 
+    # 2. 查题库（用 task.user_id）
     questions = QuizQuestion.query.filter_by(
-        user_id=current_user.id, task_id=task_id
+        user_id=task.user_id, task_id=task_id
     ).all()
 
     if request.method == "POST":
-        # 用 request.json 读取 AJAX 数据
         data = request.get_json()
         error_message = None
         for q in questions:
@@ -1390,13 +1397,13 @@ def quiz_page(task_id, employee_id):
         if error_message:
             return jsonify({"success": False, "msg": error_message})
 
-        # 更新当前员工 quiz_passed 状态
+        # 3. 更新 quiz_passed（用 task.user_id）
         status = SignatureStatus.query.filter_by(
-            user_id=current_user.id, task_id=task_id, employee_id=employee_id
+            user_id=task.user_id, task_id=task_id, employee_id=employee_id
         ).first()
         if status:
-            status.quiz_passed = True  # ✅ 标记通过
-            db.session.commit()  # ✅ 写入数据库
+            status.quiz_passed = True
+            db.session.commit()
         return jsonify(
             {
                 "success": True,
@@ -1406,7 +1413,6 @@ def quiz_page(task_id, employee_id):
             }
         )
 
-    # 👇 这一部分是修改的核心
     parsed_questions = []
     for q in questions:
         parsed_questions.append(
@@ -1849,35 +1855,24 @@ def training_task_invite(task_id):
 # 员工答题主入口，支持提交、计分、历史记录
 @app.route("/training_answer/<int:task_id>/<int:employee_id>", methods=["GET", "POST"])
 def training_answer(task_id, employee_id):
-    # 1. 员工必须属于当前用户
-    employee = Employee.query.filter_by(id=employee_id, user_id=current_user.id).first()
+    # 1. 员工必须存在
+    employee = Employee.query.filter_by(id=employee_id).first()
     if not employee:
-        return (
-            render_template(
-                "training_answer_disabled.html", msg="员工不存在或无权限。"
-            ),
-            403,
-        )
+        return render_template("training_answer_disabled.html", msg="员工不存在。"), 403
 
-    # 2. 任务必须属于当前用户
-    task = TrainingTask.query.filter_by(id=task_id, user_id=current_user.id).first()
+    # 2. 任务必须存在
+    task = TrainingTask.query.filter_by(id=task_id).first()
     if not task:
         return (
-            render_template(
-                "training_answer_disabled.html", msg="培训任务不存在或无权限。"
-            ),
+            render_template("training_answer_disabled.html", msg="培训任务不存在。"),
             403,
         )
 
-    # 3. 材料也要隔离
-    material = TrainingMaterial.query.filter_by(
-        id=task.material_id, user_id=current_user.id
-    ).first()
+    # 3. 材料查 task.material_id
+    material = TrainingMaterial.query.filter_by(id=task.material_id).first()
     if not material:
         return (
-            render_template(
-                "training_answer_disabled.html", msg="培训材料不存在或无权限。"
-            ),
+            render_template("training_answer_disabled.html", msg="培训材料不存在。"),
             403,
         )
 
@@ -1894,9 +1889,7 @@ def training_answer(task_id, employee_id):
         )
 
     # 5. 获取题库
-    questions = TrainingQuestion.query.filter_by(
-        material_id=material.id, user_id=current_user.id
-    ).all()
+    questions = TrainingQuestion.query.filter_by(material_id=material.id).all()
     parsed_questions = [
         {
             "id": q.id,
@@ -2033,24 +2026,22 @@ def training_answer(task_id, employee_id):
 # 答题前选择员工身份页
 @app.route("/training_answer_select/<int:task_id>", methods=["GET", "POST"])
 def training_answer_select(task_id):
-    # 只允许当前用户自己的任务
-    task = TrainingTask.query.filter_by(id=task_id, user_id=current_user.id).first()
+    # 不再判断当前登录用户，只要 task 存在即可
+    task = TrainingTask.query.filter_by(id=task_id).first()
     if not task:
-        return "未找到该培训任务或无权限", 404
+        return "未找到该培训任务", 404
 
-    # 只找自己员工
+    # 只找本任务分配的员工
     records = TrainingTaskEmployee.query.filter_by(task_id=task_id).all()
     emp_ids = [rec.employee_id for rec in records]
 
-    # 员工必须属于当前用户
-    employees = Employee.query.filter(
-        Employee.id.in_(emp_ids), Employee.user_id == current_user.id
-    ).all()
+    # 获取员工对象（无需user_id条件）
+    employees = Employee.query.filter(Employee.id.in_(emp_ids)).all()
 
     if request.method == "POST":
         employee_id = int(request.form.get("employee_id"))
-        # 仅允许选自己的员工
-        if employee_id not in [e.id for e in employees]:
+        # 只允许选择本任务分配的员工
+        if employee_id not in emp_ids:
             return "无效的员工选择", 403
         return redirect(
             url_for("training_answer", task_id=task_id, employee_id=employee_id)
@@ -2281,17 +2272,22 @@ def export_training_record():
 # 保存培训记录表（持久化到数据库，覆盖同task_id旧数据）
 @app.route("/api/save_training_record", methods=["POST"])
 def save_training_record():
-    # 1. 获取表单数据
     data = request.get_json()
     task_id = int(data.get("task_id"))
-    # 2. 查询数据库有无历史记录，无则新建
+
+    # 获取 task，确保任务存在，并且拿到归属用户ID
+    task = TrainingTask.query.filter_by(id=task_id).first()
+    if not task:
+        return jsonify({"status": "fail", "msg": "任务不存在"})
+
+    # 用 task.user_id 作为 user_id，防止匿名用户报错
     record = TrainingRecord.query.filter_by(
-        task_id=task_id, user_id=current_user.id
+        task_id=task_id, user_id=task.user_id
     ).first()
     if not record:
-        record = TrainingRecord(task_id=task_id, user_id=current_user.id)
+        record = TrainingRecord(task_id=task_id, user_id=task.user_id)
         db.session.add(record)
-    # 3. 更新所有字段
+    # 更新字段
     record.station = data.get("station", "")
     record.title = data.get("title", "")
     record.time = data.get("time", "")
@@ -2315,13 +2311,15 @@ def save_training_record():
 # 获取某培训任务的记录表（用于前端弹窗自动回填）
 @app.route("/api/get_training_record/<int:task_id>", methods=["GET"])
 def get_training_record(task_id):
-    # 1. 查询数据库
+    # 先查 TrainingTask 拿 user_id，确保任务存在
+    task = TrainingTask.query.filter_by(id=task_id).first()
+    if not task:
+        return jsonify({"status": "not_found"})
     record = TrainingRecord.query.filter_by(
-        task_id=task_id, user_id=current_user.id
+        task_id=task_id, user_id=task.user_id
     ).first()
     if not record:
         return jsonify({"status": "not_found"})
-    # 2. 返回所有字段
     return jsonify(
         {
             "status": "success",
