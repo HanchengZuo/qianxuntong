@@ -14,17 +14,32 @@
             background: linear-gradient(120deg, #6ab7ff 0%, #e5ecfa 100%);
         }
 
+        /* 关键：body 用 flex column，让main-content自动撑开剩余空间 */
         body {
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
+            /* justify-content 这里不用center，交给main-content自己处理 */
             font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
             box-sizing: border-box;
         }
 
+        /* 新增：main-content 负责内容区自适应居中 */
+        .main-content {
+            flex: 1;
+            /* 自动撑满剩余空间，让footer到底部 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            /* 垂直、水平都居中 */
+            width: 100%;
+            /* 兼容大屏横向居中 */
+        }
+
+        /* center-box 核心区域 */
         .center-box {
-            flex: 1 0 auto;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -35,8 +50,7 @@
             border-radius: 18px;
             box-shadow: 0 8px 36px 0 #2e8bff19, 0 2px 8px #adcbe3a8;
             padding: 44px 34px 38px 34px;
-            margin-top: 64px;
-            margin-bottom: 64px;
+            /* 去掉 margin-top/bottom，完全居中靠main-content的flex实现 */
             animation: fadeIn .6s;
             position: relative;
             z-index: 2;
@@ -234,26 +248,28 @@
 </head>
 
 <body>
-    <div class="center-box">
-        <div style="width:100%;display:flex;flex-direction:column;align-items:center;">
-            <div class="logo">📝 签训通</div>
-            <div class="system-title">智能签名与培训答题系统</div>
+    <div class="main-content">
+        <div class="center-box">
+            <div style="width:100%;display:flex;flex-direction:column;align-items:center;">
+                <div class="logo">📝 签训通</div>
+                <div class="system-title">智能签名与培训答题系统</div>
+            </div>
+            <h2>登录</h2>
+            {% if msg %}
+            <div class="success-tip">{{ msg }}</div>
+            {% endif %}
+            {% if error %}
+            <div class="error-tip">{{ error }}</div>
+            {% endif %}
+            <form method="post" class="form-area" autocomplete="off">
+                <label for="username">用户名</label>
+                <input type="text" name="username" id="username" required>
+                <label for="password">密码</label>
+                <input type="password" name="password" id="password" required>
+                <button type="submit">登录</button>
+            </form>
+            <div class="to-register">没有账号？<a href="/register">注册</a></div>
         </div>
-        <h2>登录</h2>
-        {% if msg %}
-        <div class="success-tip">{{ msg }}</div>
-        {% endif %}
-        {% if error %}
-        <div class="error-tip">{{ error }}</div>
-        {% endif %}
-        <form method="post" class="form-area" autocomplete="off">
-            <label for="username">用户名</label>
-            <input type="text" name="username" id="username" required>
-            <label for="password">密码</label>
-            <input type="password" name="password" id="password" required>
-            <button type="submit">登录</button>
-        </form>
-        <div class="to-register">没有账号？<a href="/register">注册</a></div>
     </div>
     <footer>
         © 2025 签训通 qianxuntong.xyz |
