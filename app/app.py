@@ -195,7 +195,11 @@ class TrainingTask(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     title = db.Column(db.String(200))
-    material_id = db.Column(db.Integer, db.ForeignKey("training_material.id"))
+    material_id = db.Column(
+        db.Integer,
+        db.ForeignKey("training_material.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     description = db.Column(db.Text)
     deadline = db.Column(db.Date)
     created_at = db.Column(db.DateTime, default=datetime.now)
@@ -208,7 +212,9 @@ class TrainingTaskEmployee(db.Model):
     __tablename__ = "training_task_employee"
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)
-    task_id = db.Column(db.Integer, db.ForeignKey("training_task.id"))
+    task_id = db.Column(
+        db.Integer, db.ForeignKey("training_task.id", ondelete="CASCADE")
+    )
     employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"))
     status = db.Column(db.String(10), default="未完成")
     score = db.Column(db.Float)
@@ -222,7 +228,9 @@ class TrainingAnswerHistory(db.Model):
     __tablename__ = "training_answer_history"
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
     id = db.Column(db.Integer, primary_key=True)
-    task_id = db.Column(db.Integer, db.ForeignKey("training_task.id"))
+    task_id = db.Column(
+        db.Integer, db.ForeignKey("training_task.id", ondelete="CASCADE")
+    )
     employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"))
     attempt_num = db.Column(db.Integer)  # 第几次答题
     score = db.Column(db.Float)
