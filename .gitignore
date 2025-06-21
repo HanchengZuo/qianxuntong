@@ -1,6 +1,6 @@
 # --- Flask-Migrate / Alembic 迁移目录 ---
 # 不忽略 migrations 文件夹和迁移脚本，**只忽略缓存/临时文件**
-
+.env*
 # 不要忽略 migrations/
 !migrations/
 !migrations/versions/

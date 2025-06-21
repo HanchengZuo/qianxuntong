@@ -5,8 +5,8 @@ services:
     platform: linux/amd64
     container_name: qxt-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: qxt123456
-      MYSQL_DATABASE: qianxuntong
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
       TZ: Asia/Shanghai
     ports:
       - "3306:3306"
@@ -21,7 +21,7 @@ services:
     environment:
       - FLASK_ENV=development
       - TZ=Asia/Shanghai
-      - DATABASE_URL=mysql+pymysql://root:qxt123456@db:3306/qianxuntong
+      - DATABASE_URL=${DATABASE_URL}
     ports:
       - "5050:5050"
     volumes:
