@@ -60,6 +60,13 @@ function toggleQuizConfig() {
     const configArea = document.getElementById("quizConfigArea");
     configArea.style.display = checkbox.checked ? "block" : "none";
 
+    // 新增：切换 required/disabled
+    const quizFields = configArea.querySelectorAll('.quiz-field');
+    quizFields.forEach(field => {
+        field.required = checkbox.checked;
+        field.disabled = !checkbox.checked;
+    });
+
     if (checkbox.checked) {
         // 如果还没有题目，则默认添加一个题目
         const container = document.getElementById("question-container");
@@ -90,7 +97,8 @@ window.addQuestion = function () {
                 <button type="button" class="btn-delete" onclick="removeQuestion(this)">🗑 删除题目</button>
             </span>
         </div>
-        <textarea name="questions[${index}][content]" 
+        <textarea name="questions[${index}][content]"
+                  class="quiz-field" 
                   placeholder="请输入题干内容" 
                   required 
                   style="width:100%;min-height:42px;resize:vertical;margin-bottom:10px;line-height:1.5;"></textarea>
@@ -126,7 +134,7 @@ window.addQuizOption = function (btn, qIndex) {
     div.innerHTML = `
         <textarea 
             name="questions[${qIndex}][options][]" 
-            class="option-textarea"
+            class="option-textarea quiz-field"
             placeholder="请输入选项"
             required
             style="resize:vertical;line-height:1.5;min-height:32px;"

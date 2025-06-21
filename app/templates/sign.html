@@ -294,106 +294,104 @@
         const signatureKey = `signature_image_${taskId}_${employeeId}`;
         const signatureImg = localStorage.getItem(signatureKey);
 
-        const pdfjsLib = window['pdfjs-dist/build/pdf'];
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
-
-        const wrapper = document.getElementById("pdf-wrapper");
-
         let previewWidth = 1240;
         let previewHeight = 1754;
 
-        function renderPDF(url) {
-            pdfjsLib.getDocument(url).promise.then(pdfDoc => {
-                for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-                    pdfDoc.getPage(pageNum).then(page => {
-                        const scale = 1.5;
-                        const viewport = page.getViewport({ scale });
+        function renderPDFImages(imgs) {
+            const wrapper = document.getElementById("pdf-wrapper");
+            wrapper.innerHTML = ""; // 清空
 
-                        const container = document.createElement("div");
-                        container.className = "pdf-container";
-                        container.style.position = "relative"; // 确保绝对定位有效
+            imgs.forEach((imgUrl, pageIdx) => {
+                const pageNum = pageIdx + 1;
+                // 父容器
+                const container = document.createElement("div");
+                container.className = "pdf-img-container";
+                container.style.position = "relative";
 
-                        const canvas = document.createElement("canvas");
-                        const context = canvas.getContext("2d");
-                        canvas.width = viewport.width;
-                        canvas.height = viewport.height;
-                        container.appendChild(canvas);
+                // PDF图片
+                const img = document.createElement("img");
+                img.src = imgUrl;
+                img.style.width = "100%";
+                img.style.display = "block";
+                img.onload = function () {
+                    // 渲染签名框
+                    const realWidth = img.getBoundingClientRect().width;
+                    const realHeight = img.getBoundingClientRect().height;
 
-                        // 页面自适应宽度
-                        canvas.style.width = "100%";
-                        canvas.style.height = "auto";
-                        // 记录pdf原始宽高
-                        const pdfOriginWidth = viewport.width;
-                        const pdfOriginHeight = viewport.height;
+                    if (pageNum === 1) {
+                        previewWidth = img.naturalWidth;
+                        previewHeight = img.naturalHeight;
+                    }
 
-                        if (pageNum === 1) {
-                            previewWidth = pdfOriginWidth;
-                            previewHeight = pdfOriginHeight;
+                    boxes.filter(b => b.page === pageNum && b.employee_id == employeeId).forEach(b => {
+                        const scaleX = realWidth / (b.preview_width || previewWidth);
+                        const scaleY = realHeight / (b.preview_height || previewHeight);
+
+                        const boxLeft = b.left * scaleX + "px";
+                        const boxTop = b.top * scaleY + "px";
+                        const boxWidth = b.width * scaleX + "px";
+                        const boxHeight = b.height * scaleY + "px";
+
+                        if (b.signed && b.image) {
+                            const sigImg = document.createElement("img");
+                            sigImg.src = b.image;
+                            sigImg.style.width = boxWidth;
+                            sigImg.style.height = boxHeight;
+                            sigImg.style.position = "absolute";
+                            sigImg.style.left = boxLeft;
+                            sigImg.style.top = boxTop;
+                            sigImg.style.zIndex = 20;
+                            sigImg.style.pointerEvents = "none";
+                            container.appendChild(sigImg);
+                        } else if (signatureImg) {
+                            const sigImg = document.createElement("img");
+                            sigImg.src = signatureImg;
+                            sigImg.style.width = boxWidth;
+                            sigImg.style.height = boxHeight;
+                            sigImg.style.position = "absolute";
+                            sigImg.style.left = boxLeft;
+                            sigImg.style.top = boxTop;
+                            sigImg.style.zIndex = 20;
+                            sigImg.style.pointerEvents = "none";
+                            container.appendChild(sigImg);
+                        } else {
+                            const nameDiv = document.createElement("div");
+                            nameDiv.className = "signature-placeholder";
+                            nameDiv.style.left = boxLeft;
+                            nameDiv.style.top = boxTop;
+                            nameDiv.style.width = boxWidth;
+                            nameDiv.style.height = boxHeight;
+                            nameDiv.style.border = "2px dashed gray";
+                            nameDiv.style.backgroundColor = "transparent";
+                            nameDiv.style.position = "absolute";
+                            nameDiv.style.zIndex = 21;
+                            nameDiv.style.animation = "none";
+
+                            const label = document.createElement("div");
+                            label.className = "sig-name";
+                            label.textContent = employeeName;
+                            nameDiv.appendChild(label);
+                            container.appendChild(nameDiv);
                         }
-
-                        page.render({ canvasContext: context, viewport }).promise.then(() => {
-                            // 注意必须等渲染完获取真实DOM宽高
-                            // 取canvas实际渲染出来的宽度
-                            const realWidth = canvas.getBoundingClientRect().width;
-                            const realHeight = canvas.getBoundingClientRect().height;
-                            // 缩放比例
-                            const scaleX = realWidth / pdfOriginWidth;
-                            const scaleY = realHeight / pdfOriginHeight;
-
-                            // 当前页中该员工的签名框
-                            boxes.filter(b => b.page === pageNum && b.employee_id == employeeId).forEach(b => {
-                                // 按真实渲染比例缩放
-                                const boxLeft = b.left * scaleX + "px";
-                                const boxTop = b.top * scaleY + "px";
-                                const boxWidth = b.width * scaleX + "px";
-                                const boxHeight = b.height * scaleY + "px";
-
-                                if (b.signed && b.image) {
-                                    const img = document.createElement("img");
-                                    img.src = b.image;
-                                    img.style.width = boxWidth;
-                                    img.style.height = boxHeight;
-                                    img.style.position = "absolute";
-                                    img.style.left = boxLeft;
-                                    img.style.top = boxTop;
-                                    img.style.zIndex = 20;
-                                    img.style.pointerEvents = "none";
-                                    container.appendChild(img);
-                                } else if (signatureImg) {
-                                    const img = document.createElement("img");
-                                    img.src = signatureImg;
-                                    img.style.width = boxWidth;
-                                    img.style.height = boxHeight;
-                                    img.style.position = "absolute";
-                                    img.style.left = boxLeft;
-                                    img.style.top = boxTop;
-                                    img.style.zIndex = 20;
-                                    img.style.pointerEvents = "none";
-                                    container.appendChild(img);
-                                } else {
-                                    const nameDiv = document.createElement("div");
-                                    nameDiv.className = "signature-placeholder";
-                                    nameDiv.style.left = boxLeft;
-                                    nameDiv.style.top = boxTop;
-                                    nameDiv.style.width = boxWidth;
-                                    nameDiv.style.height = boxHeight;
-                                    nameDiv.style.border = "2px dashed gray";
-                                    nameDiv.style.backgroundColor = "transparent";
-                                    nameDiv.style.animation = "none";
-
-                                    const label = document.createElement("div");
-                                    label.className = "sig-name";
-                                    label.textContent = employeeName;
-                                    nameDiv.appendChild(label);
-                                    container.appendChild(nameDiv);
-                                }
-                            });
-                        });
-
-                        wrapper.appendChild(container);
                     });
-                }
+                };
+
+                container.appendChild(img);
+                wrapper.appendChild(container);
             });
+        }
+
+        // 获取图片数据
+        function loadPDFImages() {
+            fetch(`/api/pdf_images/${taskId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === "success") {
+                        renderPDFImages(data.imgs);
+                    } else {
+                        alert(data.msg || "PDF图片加载失败");
+                    }
+                });
         }
 
         function submitSignature() {
@@ -430,7 +428,7 @@
         }
 
         window.onload = () => {
-            renderPDF(pdfUrl);
+            loadPDFImages();
         };
 
         function goToSignCanvas() {

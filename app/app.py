@@ -605,6 +605,48 @@ def save_box(task_id):
     return jsonify({"status": "success"})
 
 
+@app.route("/api/pdf_images/<task_id>")
+def api_pdf_images(task_id):
+    """
+    输入: task_id
+    输出: 返回所有图片URL列表（假设图片已存在），没有就动态生成到 static/pdf_images/ 下
+    """
+    # 拿到 PDF 所在目录、文件名
+    task = SignatureTask.query.filter_by(task_id=task_id).first()
+    if not task:
+        return jsonify({"status": "fail", "msg": "未找到签名任务"}), 404
+    user_id = task.user_id
+
+    user_folder = os.path.join(app.config["UPLOAD_FOLDER"], str(user_id))
+    pdf_path = next((f for f in os.listdir(user_folder) if f.startswith(task_id)), None)
+    if not pdf_path:
+        return jsonify({"status": "fail", "msg": "未找到PDF文件"}), 404
+    full_pdf_path = os.path.join(user_folder, pdf_path)
+
+    # 图片保存目录
+    img_folder = os.path.join("static", "pdf_images", str(user_id), task_id)
+    os.makedirs(img_folder, exist_ok=True)
+
+    # 检查图片是否已生成
+    img_files = []
+    page_count = 0
+    try:
+        doc = fitz.open(full_pdf_path)
+        page_count = doc.page_count
+        for i in range(page_count):
+            img_name = f"page_{i+1}.png"
+            img_path = os.path.join(img_folder, img_name)
+            if not os.path.exists(img_path):
+                page = doc[i]
+                pix = page.get_pixmap(dpi=120)
+                pix.save(img_path)
+            img_files.append(f"/static/pdf_images/{user_id}/{task_id}/page_{i+1}.png")
+    except Exception as e:
+        return jsonify({"status": "fail", "msg": f"PDF转图片失败: {e}"}), 500
+
+    return jsonify({"status": "success", "imgs": img_files, "count": page_count})
+
+
 # 签名主页面（员工签名入口，批量签）
 @app.route("/sign/<task_id>")
 def sign_page(task_id):
@@ -2485,6 +2527,38 @@ def smart_layout_options(options, max_line_len=36):
             return [first, second]
     # 3. 每行一个
     return abcd
+
+
+@app.route("/api/material_images/<int:material_id>")
+def api_material_images(material_id):
+    # 查询材料
+    mat = TrainingMaterial.query.filter_by(id=material_id).first()
+    if not mat:
+        return jsonify({"status": "fail", "msg": "材料不存在"}), 404
+
+    # PDF绝对路径
+    pdf_path = os.path.join("static/training_materials", mat.file_path)
+    if not os.path.exists(pdf_path):
+        return jsonify({"status": "fail", "msg": "PDF文件不存在"}), 404
+
+    # 图片保存路径
+    img_folder = os.path.join("static", "material_images", str(material_id))
+    os.makedirs(img_folder, exist_ok=True)
+    img_files = []
+    try:
+        doc = fitz.open(pdf_path)
+        for i in range(doc.page_count):
+            img_name = f"page_{i+1}.png"
+            img_path = os.path.join(img_folder, img_name)
+            if not os.path.exists(img_path):
+                page = doc[i]
+                pix = page.get_pixmap(dpi=120)
+                pix.save(img_path)
+            img_files.append(f"/static/material_images/{material_id}/page_{i+1}.png")
+    except Exception as e:
+        return jsonify({"status": "fail", "msg": f"PDF转图片失败: {e}"}), 500
+
+    return jsonify({"status": "success", "imgs": img_files, "count": len(img_files)})
 
 
 # ===============================

@@ -216,34 +216,35 @@
         </span>
     </footer>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+
     <script>
-        const pdfUrl = "/static/training_materials/{{ material.file_path }}";
-        const pdfjsLib = window['pdfjs-dist/build/pdf'];
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
-        const wrapper = document.getElementById("pdf-wrapper");
-        function renderPDF(url) {
-            pdfjsLib.getDocument(url).promise.then(pdfDoc => {
-                for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-                    pdfDoc.getPage(pageNum).then(page => {
-                        const scale = Math.min(window.innerWidth / 900, 1.1); // 响应式缩放
-                        const viewport = page.getViewport({ scale: scale * 1.1 });
-                        const container = document.createElement("div");
-                        container.className = "pdf-container";
-                        const canvas = document.createElement("canvas");
-                        const context = canvas.getContext("2d");
-                        canvas.width = viewport.width;
-                        canvas.height = viewport.height;
-                        container.appendChild(canvas);
-                        canvas.style.width = "100%";
-                        canvas.style.height = "auto";
-                        page.render({ canvasContext: context, viewport });
-                        wrapper.appendChild(container);
-                    });
-                }
+        const materialId = {{ material.id or 0 }};
+        function renderMaterialImages(imgs) {
+            const wrapper = document.getElementById("pdf-wrapper");
+            wrapper.innerHTML = "";
+            imgs.forEach((imgUrl, pageIdx) => {
+                const img = document.createElement("img");
+                img.src = imgUrl;
+                img.style.width = "100%";
+                img.style.display = "block";
+                img.style.marginBottom = "6px";
+                img.loading = "lazy";
+                wrapper.appendChild(img);
             });
         }
-        window.onload = () => { renderPDF(pdfUrl); };
+        function loadMaterialImages() {
+            fetch(`/api/material_images/${materialId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === "success") {
+                        renderMaterialImages(data.imgs);
+                    } else {
+                        document.getElementById("pdf-wrapper").innerHTML =
+                            "<div style='color:red;text-align:center;padding:20px;'>材料图片加载失败：" + (data.msg || "") + "</div>";
+                    }
+                });
+        }
+        window.onload = loadMaterialImages;
 
         // 答题提交
         const quizForm = document.getElementById("quizForm");
