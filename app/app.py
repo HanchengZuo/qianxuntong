@@ -178,7 +178,9 @@ class TrainingQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     material_id = db.Column(
-        db.Integer, db.ForeignKey("training_material.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("training_material.id", ondelete="CASCADE"),
+        nullable=False,
     )
     content = db.Column(db.Text, nullable=False)
     options = db.Column(db.Text, nullable=False)  # JSON: ["A", "B", ...]
