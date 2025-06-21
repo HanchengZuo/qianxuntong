@@ -607,7 +607,6 @@ def save_box(task_id):
 
 # 签名主页面（员工签名入口，批量签）
 @app.route("/sign/<task_id>")
-@login_required
 def sign_page(task_id):
     boxes = SignatureBox.query.filter_by(task_id=task_id).all()
     if not boxes:
@@ -636,7 +635,6 @@ def sign_page(task_id):
 
 # 签名提交API，保存签名图、状态并自动合成PDF
 @app.route("/submit_sign/<task_id>", methods=["POST"])
-@login_required
 def submit_sign(task_id):
     task = SignatureTask.query.filter_by(
         user_id=current_user.id, task_id=task_id
@@ -750,7 +748,6 @@ def submit_sign(task_id):
 
 
 @app.route("/sign_submitted/<task_id>")
-@login_required
 def sign_submitted(task_id):
     return render_template("sign_submitted.html", task_id=task_id)
 
@@ -840,7 +837,6 @@ def delete_record(task_id):
 
 # 签名前选择员工身份页面
 @app.route("/sign_select/<task_id>", methods=["GET", "POST"])
-@login_required
 def sign_select(task_id):
     task = SignatureTask.query.filter_by(
         user_id=current_user.id, task_id=task_id
@@ -876,7 +872,6 @@ def sign_select(task_id):
 
 # 针对指定员工的签名页
 @app.route("/sign/<task_id>/<int:employee_id>")
-@login_required
 def sign_page_employee(task_id, employee_id):
     # ✅ 获取任务
     task = SignatureTask.query.filter_by(
@@ -1356,7 +1351,6 @@ def ai_generate_questions():
 # ===============================
 # 员工签名前答题入口，答题通过后允许签名
 @app.route("/sign_quiz/<task_id>/<int:employee_id>", methods=["GET", "POST"])
-@login_required
 def quiz_page(task_id, employee_id):
     task = SignatureTask.query.filter_by(
         user_id=current_user.id, task_id=task_id
@@ -1854,7 +1848,6 @@ def training_task_invite(task_id):
 
 # 员工答题主入口，支持提交、计分、历史记录
 @app.route("/training_answer/<int:task_id>/<int:employee_id>", methods=["GET", "POST"])
-@login_required
 def training_answer(task_id, employee_id):
     # 1. 员工必须属于当前用户
     employee = Employee.query.filter_by(id=employee_id, user_id=current_user.id).first()
@@ -2039,7 +2032,6 @@ def training_answer(task_id, employee_id):
 
 # 答题前选择员工身份页
 @app.route("/training_answer_select/<int:task_id>", methods=["GET", "POST"])
-@login_required
 def training_answer_select(task_id):
     # 只允许当前用户自己的任务
     task = TrainingTask.query.filter_by(id=task_id, user_id=current_user.id).first()
