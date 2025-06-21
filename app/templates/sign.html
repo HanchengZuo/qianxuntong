@@ -332,6 +332,8 @@
                         const boxWidth = b.width * scaleX + "px";
                         const boxHeight = b.height * scaleY + "px";
 
+                        const signatureImgLatest = localStorage.getItem(signatureKey);
+
                         if (b.signed && b.image) {
                             const sigImg = document.createElement("img");
                             sigImg.src = b.image;
@@ -395,6 +397,7 @@
         }
 
         function submitSignature() {
+            const signatureImgCurrent = localStorage.getItem(signatureKey);
             if (!signatureImg) {
                 alert("请先完成签名");
                 return;
@@ -420,6 +423,7 @@
                 body: JSON.stringify(payload)
             }).then(res => res.json()).then(data => {
                 if (data.status === "success") {
+                    localStorage.removeItem(signatureKey);
                     window.location.href = data.redirect;
                 } else {
                     alert("提交失败：" + data.msg);
@@ -435,6 +439,12 @@
             // employeeId 是模板变量，要在渲染时插入
             window.location.href = `/sign_canvas/{{ task_id }}/{{ employee_id }}`;
         }
+
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) {
+                loadPDFImages();
+            }
+        });
 
     </script>
 </body>
